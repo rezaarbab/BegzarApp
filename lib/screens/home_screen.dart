@@ -73,6 +73,15 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  // Helper function to safely parse string to int
+  int _parseToInt(String value) {
+    try {
+      return int.parse(value);
+    } catch (e) {
+      return 0;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -176,10 +185,10 @@ class _HomePageState extends State<HomePage> {
                                   if (value.state == 'CONNECTED') ...[
                                     Expanded(
                                       child: IOSVpnCard(
-                                        download: int.parse(value.download),
-                                        upload: int.parse(value.upload),
-                                        downloadSpeed: int.parse(value.downloadSpeed),
-                                        uploadSpeed: int.parse(value.uploadSpeed),
+                                        download: _parseToInt(value.download),
+                                        upload: _parseToInt(value.upload),
+                                        downloadSpeed: _parseToInt(value.downloadSpeed),
+                                        uploadSpeed: _parseToInt(value.uploadSpeed),
                                         selectedServer: selectedServer,
                                         selectedServerLogo:
                                             selectedServerLogo ??
@@ -205,10 +214,10 @@ class _HomePageState extends State<HomePage> {
                                 _buildDelayIndicator(),
                                 const SizedBox(height: 32),
                                 IOSVpnCard(
-                                  download: int.parse(value.download),
-                                  upload: int.parse(value.upload),
-                                  downloadSpeed: int.parse(value.downloadSpeed),
-                                  uploadSpeed: int.parse(value.uploadSpeed),
+                                  download: _parseToInt(value.download),
+                                  upload: _parseToInt(value.upload),
+                                  downloadSpeed: _parseToInt(value.downloadSpeed),
+                                  uploadSpeed: _parseToInt(value.uploadSpeed),
                                   selectedServer: selectedServer,
                                   selectedServerLogo: selectedServerLogo ??
                                       'assets/lottie/auto.json',
