@@ -363,21 +363,17 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  Future<void> getDomain() async {
-    try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      setState(() {
-        isLoading = true;
-        blockedApps = prefs.getStringList('blockedApps') ?? [];
-      });
-      final response = await httpClient.get('').timeout(
-        Duration(seconds: 8),
-        onTimeout: () {
-          throw TimeoutException(context.tr('error_timeout'));
-        },
-      );
-      domainName = response.data;
-      checkUpdate();
+Future<void> getDomain() async {
+  try {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      isLoading = true;
+      blockedApps = prefs.getStringList('blockedApps') ?? [];
+    });
+    
+    // 🔥 مستقیم به Cloudflare Worker وصل میشیم
+    domainName = 'begzar-api.lastofanarchy.workers.dev';
+    checkUpdate();
     } on TimeoutException catch (e) {
       if (mounted) {
         setState(() {
@@ -423,37 +419,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   void checkUpdate() async {
-    try {
-      final serverParam = getServerParam();
-
-      String userKey = await storage.read(key: 'user') ?? '';
-      if (userKey == '') {
-        final response = await Dio()
-            .get(
-          "https://$domainName/api/firebase/init/android",
-          options: Options(
-            headers: {
-              'X-Content-Type-Options': 'nosniff',
-            },
-          ),
-        )
-            .timeout(
-          Duration(seconds: 8),
-          onTimeout: () {
-            throw TimeoutException(context.tr('error_timeout'));
-          },
-        );
-        final dataJson = response.data;
-        final key = dataJson['key'];
-        userKey = key;
-        await storage.write(key: 'user', value: key);
-      } else {
-        userKey = await storage.read(key: 'user') ?? '';
-      }
-
+  try {
+    // 🔑 دریافت یا ساخت User Key
+    String userKey = await storage.read(key: 'user') ?? '';
+    if (userKey == '') {
       final response = await Dio()
           .get(
-        "https://$domainName/api/firebase/init/data/$userKey",
+        "https://$domainName/api/firebase/init/android",
         options: Options(
           headers: {
             'X-Content-Type-Options': 'nosniff',
@@ -466,74 +438,78 @@ class _HomePageState extends State<HomePage> {
           throw TimeoutException(context.tr('error_timeout'));
         },
       );
-      if (response.data['status'] == true) {
-        final dataJson = response.data;
-        final secureData = dataJson['data']['secure'];
-        final x1 = dataJson['data']['x1'];
-        final x2 = dataJson['data']['x2'];
-        final version = dataJson['version'];
-        final updateUrl = dataJson['updated_url'];
+      final dataJson = response.data;
+      final key = dataJson['key'];
+      userKey = key;
+      await storage.write(key: 'user', value: key);
+    }
 
-        final serverEncode = decrypt(secureData, x1, x2, userKey);
+    // 📡 دریافت لیست سرورها
+    final response = await Dio()
+        .get(
+      "https://$domainName/api/firebase/init/data/$userKey",
+      options: Options(
+        headers: {
+          'X-Content-Type-Options': 'nosniff',
+        },
+      ),
+    )
+        .timeout(
+      Duration(seconds: 8),
+      onTimeout: () {
+        throw TimeoutException(context.tr('error_timeout'));
+      },
+    );
+    
+    if (response.data['status'] == true) {
+      final dataJson = response.data;
+      final serverEncode = dataJson['data']['secure']; // کانفیگ‌ها مستقیم
+      final version = dataJson['version'];
+      final updateUrl = dataJson['updated_url'];
 
-        List<String> servers = LineSplitter.split(serverEncode).toList();
+      // 📝 تبدیل کانفیگ‌ها به لیست
+      List<String> servers = LineSplitter.split(serverEncode).toList();
 
-        if (version == versionName) {
-          await connect(servers);
+      // ✅ چک ورژن
+      if (version == versionName) {
+        await connect(servers);
+      } else {
+        // 🔄 نمایش دیالوگ آپدیت
+        if (updateUrl.isNotEmpty) {
+          AwesomeDialog(
+            context: context,
+            dialogType: DialogType.warning,
+            title: context.tr('update_title'),
+            desc: context.tr('update_description'),
+            dialogBackgroundColor: Colors.white,
+            btnCancelOnPress: () {},
+            btnOkOnPress: () async {
+              await launchUrl(Uri.parse(utf8.decode(base64Decode(updateUrl))),
+                  mode: LaunchMode.externalApplication);
+            },
+            btnOkText: context.tr('download'),
+            btnCancelText: context.tr('close'),
+            buttonsTextStyle: TextStyle(
+                fontFamily: 'sm', color: Colors.white, fontSize: 14),
+            titleTextStyle: TextStyle(
+                fontFamily: 'sb', color: Colors.black, fontSize: 16),
+            descTextStyle: TextStyle(
+                fontFamily: 'sm', color: Colors.black, fontSize: 14),
+          )..show();
         } else {
-          if (updateUrl.isNotEmpty) {
-            AwesomeDialog(
-              context: context,
-              dialogType: DialogType.warning,
-              title: context.tr('update_title'),
-              desc: context.tr('update_description'),
-              dialogBackgroundColor: Colors.white,
-              btnCancelOnPress: () {},
-              btnOkOnPress: () async {
-                await launchUrl(Uri.parse(utf8.decode(base64Decode(updateUrl))),
-                    mode: LaunchMode.externalApplication);
-              },
-              btnOkText: context.tr('download'),
-              btnCancelText: context.tr('close'),
-              buttonsTextStyle: TextStyle(
-                  fontFamily: 'sm', color: Colors.white, fontSize: 14),
-              titleTextStyle: TextStyle(
-                  fontFamily: 'sb', color: Colors.black, fontSize: 16),
-              descTextStyle: TextStyle(
-                  fontFamily: 'sm', color: Colors.black, fontSize: 14),
-            )..show();
-          } else {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    context.tr('update_install'),
-                  ),
-                  behavior: SnackBarBehavior.floating,
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  context.tr('update_install'),
                 ),
-              );
-            }
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
           }
         }
-      } else {
-        if (mounted) {
-          setState(() {
-            isLoading = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                context.tr('request_limit'),
-                style: TextStyle(
-                  fontFamily: 'GM',
-                ),
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
       }
-    } on TimeoutException catch (e) {
+    } else {
       if (mounted) {
         setState(() {
           isLoading = false;
@@ -541,29 +517,47 @@ class _HomePageState extends State<HomePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              e.message!,
+              context.tr('request_limit'),
+              style: TextStyle(
+                fontFamily: 'GM',
+              ),
             ),
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              context.tr('error_get_version'),
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
+    }
+  } on TimeoutException catch (e) {
+    if (mounted) {
       setState(() {
         isLoading = false;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.message!,
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr('error_get_version'),
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  } finally {
+    setState(() {
+      isLoading = false;
+    });
   }
+}
 
   Future<void> connect(List<String> serverList) async {
     if (serverList.isEmpty) {
