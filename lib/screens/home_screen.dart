@@ -422,7 +422,7 @@ Future<void> getDomain() async {
     }
   }
 
-  void checkUpdate() async {
+ void checkUpdate() async {
   try {
     // 🔑 دریافت یا ساخت User Key
     String userKey = await storage.read(key: 'user') ?? '';
@@ -467,12 +467,23 @@ Future<void> getDomain() async {
     
     if (response.data['status'] == true) {
       final dataJson = response.data;
-      final serverEncode = dataJson['data']['secure']; // کانفیگ‌ها مستقیم
       final version = dataJson['version'];
       final updateUrl = dataJson['updated_url'];
-
-      // 📝 تبدیل کانفیگ‌ها به لیست
-      List<String> servers = LineSplitter.split(serverEncode).toList();
+      
+      // 🔥 دریافت سرورها با نام
+      List<dynamic> serversJson = dataJson['servers'];
+      List<Map<String, String>> servers = [];
+      
+      for (var server in serversJson) {
+        servers.add({
+          'name': server['name'],
+          'config': server['config']
+        });
+      }
+      
+      // ذخیره لیست سرورها
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString('servers_list', jsonEncode(servers));
 
       // ✅ چک ورژن
       if (version == versionName) {
@@ -500,17 +511,6 @@ Future<void> getDomain() async {
             descTextStyle: TextStyle(
                 fontFamily: 'sm', color: Colors.black, fontSize: 14),
           )..show();
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  context.tr('update_install'),
-                ),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          }
         }
       }
     } else {
@@ -562,42 +562,94 @@ Future<void> getDomain() async {
     });
   }
 }
+ Future<void> connect(List<Map<String, String>> serverList) async {
+  if (serverList.isEmpty) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr('error_no_server_connected'),
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    setState(() {
+      isLoading = false;
+    });
+    return;
+  }
 
-  Future<void> connect(List<String> serverList) async {
-    if (serverList.isEmpty) {
-      // سرور یافت نشد
+  setState(() {
+    isLoading = true;
+  });
+
+  List<Map<String, String>> filteredServers = [];
+
+  // 🎯 فیلتر کردن سرورها بر اساس انتخاب کاربر
+  if (selectedServer == 'Automatic') {
+    // همه سرورها
+    filteredServers = serverList;
+  } else {
+    // سرور خاص بر اساس نام
+    var found = serverList.where((s) => s['name'] == selectedServer).toList();
+    if (found.isNotEmpty) {
+      filteredServers.add(found[0]);
+    }
+  }
+
+  if (filteredServers.isEmpty) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr('error_no_server_connected'),
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    setState(() {
+      isLoading = false;
+    });
+    return;
+  }
+
+  List<String> configList = [];
+
+  // تبدیل URL به کانفیگ
+  filteredServers.forEach((server) {
+    final V2RayURL v2rayURL = FlutterV2ray.parseFromURL(server['config']!);
+    configList.add(v2rayURL.getFullConfiguration());
+  });
+
+  // 🚀 اگر فقط یک سرور انتخاب شده، مستقیم وصل میشیم
+  if (configList.length == 1) {
+    String bestConfig = configList[0];
+    
+    if (await flutterV2ray.requestPermission()) {
+      flutterV2ray.startV2Ray(
+        remark: context.tr('app_title'),
+        config: bestConfig,
+        proxyOnly: false,
+        bypassSubnets: null,
+        notificationDisconnectButtonName: context.tr('disconnect_btn'),
+        blockedApps: blockedApps,
+      );
+    } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              context.tr('error_no_server_connected'),
-            ),
+            content: Text(context.tr('error_permission')),
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
-      setState(() {
-        isLoading = false;
-      });
-      return;
     }
-
-    setState(() {
-      isLoading = true;
-    });
-
-    List<String> list = [];
-
-    serverList.forEach((element) {
-      final V2RayURL v2rayURL = FlutterV2ray.parseFromURL(element);
-
-      list.add(v2rayURL.getFullConfiguration());
-    });
-
+  } else {
+    // 🎯 Automatic mode - تست همه و انتخاب بهترین
     Map<String, dynamic> getAllDelay =
-        jsonDecode(await flutterV2ray.getAllServerDelay(configs: list));
-
-    list.clear();
+        jsonDecode(await flutterV2ray.getAllServerDelay(configs: configList));
 
     int minPing = 99999999;
     String bestConfig = '';
@@ -645,16 +697,18 @@ Future<void> getDomain() async {
         );
       }
     }
-    Future.delayed(
-      Duration(seconds: 1),
-      () {
-        delay();
-      },
-    );
-    setState(() {
-      isLoading = false;
-    });
   }
+
+  Future.delayed(
+    Duration(seconds: 1),
+    () {
+      delay();
+    },
+  );
+  setState(() {
+    isLoading = false;
+  });
+}
 
   void delay() async {
     if (v2rayStatus.value.state == 'CONNECTED') {
