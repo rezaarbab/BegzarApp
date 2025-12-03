@@ -586,6 +586,9 @@ class _HomePageState extends State<HomePage> {
 
 
 
+
+
+
   Future<void> connect(List<Map<String, String>> serverList) async {
   if (serverList.isEmpty) {
     if (mounted) {
@@ -610,7 +613,6 @@ class _HomePageState extends State<HomePage> {
 
   // 🎯 فیلتر کردن سرورها
   if (selectedServer == 'Automatic') {
-    // Automatic: فقط اولین سرور رو انتخاب میکنیم (بدون تست ping)
     if (serverList.isNotEmpty) {
       filteredServers.add(serverList[0]);
       print('🔄 Automatic mode - انتخاب اولین سرور: ${serverList[0]['name']}');
@@ -648,18 +650,30 @@ class _HomePageState extends State<HomePage> {
   try {
     var server = filteredServers[0];
     print('🔧 Parse: ${server['name']}');
-  String urlPreview = server['config']!.length > 50 
-    ? server['config']!.substring(0, 50) + '...'
-    : server['config']!;
-print('   URL: $urlPreview');
     
+    // نمایش کامل کانفیگ
+    print('📄 کانفیگ کامل:');
+    print('   ${server['config']}');
+    
+    // Parse کردن
     final V2RayURL v2rayURL = FlutterV2ray.parseFromURL(server['config']!);
     configToConnect = v2rayURL.getFullConfiguration();
     
     print('✅ Parse موفق: ${server['name']}');
-    print('📄 Config length: ${configToConnect.length} chars');
-  } catch (e) {
+    print('📊 جزئیات Parse شده:');
+    print('   - طول کانفیگ نهایی: ${configToConnect.length} chars');
+    
+    // نمایش 200 کاراکتر اول کانفیگ نهایی
+    String configPreview = configToConnect.length > 200 
+        ? configToConnect.substring(0, 200) + '...'
+        : configToConnect;
+    print('   - کانفیگ نهایی: $configPreview');
+    
+  } catch (e, stackTrace) {
     print('❌ خطا در Parse: $e');
+    print('📚 StackTrace:');
+    print(stackTrace.toString());
+    
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -682,6 +696,7 @@ print('   URL: $urlPreview');
       if (await flutterV2ray.requestPermission()) {
         print('✅ دسترسی VPN داده شد');
         
+        print('🔌 در حال اتصال به V2Ray...');
         await flutterV2ray.startV2Ray(
           remark: context.tr('app_title'),
           config: configToConnect,
@@ -698,8 +713,18 @@ print('   URL: $urlPreview');
         await Future.delayed(Duration(seconds: 2));
         
         // چک کردن وضعیت
+        print('🔍 چک وضعیت اتصال:');
+        print('   - State: ${v2rayStatus.value.state}');
+        print('   - Duration: ${v2rayStatus.value.duration}');
+        
         if (v2rayStatus.value.state == 'CONNECTED') {
           print('🎉 اتصال برقرار شد!');
+          
+          // تست ping
+          await Future.delayed(Duration(seconds: 1));
+          int? ping = await flutterV2ray.getConnectedServerDelay();
+          print('📶 Ping: ${ping ?? "N/A"} ms');
+          
         } else {
           print('⚠️ هنوز در حال اتصال... (${v2rayStatus.value.state})');
         }
@@ -715,8 +740,11 @@ print('   URL: $urlPreview');
           );
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('❌ خطا در اتصال: $e');
+      print('📚 StackTrace:');
+      print(stackTrace.toString());
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -737,6 +765,18 @@ print('   URL: $urlPreview');
   });
 }
 
+
+
+
+
+
+
+
+
+
+
+
+  
 
 
 
