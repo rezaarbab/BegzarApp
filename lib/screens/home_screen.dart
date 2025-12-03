@@ -21,6 +21,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../common/theme.dart';
 
+// کلاس V2RayStatus برای سازگاری
+class V2RayStatus {
+  final String state;
+  final String upload;
+  final String download;
+  final String uploadSpeed;
+  final String downloadSpeed;
+  final String duration;
+
+  V2RayStatus({
+    this.state = 'DISCONNECTED',
+    this.upload = '0',
+    this.download = '0',
+    this.uploadSpeed = '0',
+    this.downloadSpeed = '0',
+    this.duration = '00:00:00',
+  });
+}
+
 class HomePage extends StatefulWidget {
   HomePage({super.key});
 
@@ -30,9 +49,10 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   // V2Ray Client
-  late final V2RayClient v2rayClient;
-  String connectionState = 'DISCONNECTED'; // DISCONNECTED, CONNECTING, CONNECTED, ERROR
+  V2RayClient? v2rayClient;
+  String connectionState = 'DISCONNECTED';
   Timer? _statsTimer;
+  Timer? _stateTimer;
   
   // Stats
   int uploadSpeed = 0;
@@ -57,31 +77,39 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    v2rayClient = V2RayClient();
+    _initializeV2Ray();
     getVersionName();
     _loadServerSelection();
-    _checkConnectionState();
     coreVersion = 'V2Ray Core';
     setState(() {});
   }
 
-  // چک کردن وضعیت اتصال هر 1 ثانیه
+  Future<void> _initializeV2Ray() async {
+    try {
+      v2rayClient = V2RayClient();
+      _checkConnectionState();
+    } catch (e) {
+      print('Error initializing V2Ray: $e');
+    }
+  }
+
+  // چک کردن وضعیت اتصال
   void _checkConnectionState() {
-    Timer.periodic(Duration(seconds: 1), (timer) async {
-      if (!mounted) {
+    _stateTimer?.cancel();
+    _stateTimer = Timer.periodic(Duration(seconds: 1), (timer) async {
+      if (!mounted || v2rayClient == null) {
         timer.cancel();
         return;
       }
       
       try {
-        final state = await v2rayClient.getState();
+        final state = await v2rayClient!.getState();
         
         if (state != connectionState) {
           setState(() {
             connectionState = state;
           });
           
-          // اگر متصل شد، شروع مانیتورینگ
           if (state == 'connected') {
             _startStatsMonitoring();
             Future.delayed(Duration(seconds: 2), () {
@@ -100,18 +128,17 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  // مانیتورینگ آمار
   void _startStatsMonitoring() {
     _statsTimer?.cancel();
     
     _statsTimer = Timer.periodic(Duration(seconds: 1), (timer) async {
-      if (!mounted) {
+      if (!mounted || v2rayClient == null) {
         timer.cancel();
         return;
       }
       
       try {
-        final stats = await v2rayClient.getStats();
+        final stats = await v2rayClient!.getStats();
         
         setState(() {
           upload = stats.upload;
@@ -119,7 +146,6 @@ class _HomePageState extends State<HomePage> {
           uploadSpeed = stats.upload;
           downloadSpeed = stats.download;
           
-          // محاسبه Duration
           int seconds = stats.duration;
           int hours = seconds ~/ 3600;
           int minutes = (seconds % 3600) ~/ 60;
@@ -145,7 +171,6 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  // ساخت V2RayStatus شبیه‌ساز برای سازگاری با Widget های قدیمی
   V2RayStatus _createMockStatus() {
     return V2RayStatus(
       state: connectionState.toUpperCase(),
@@ -357,13 +382,14 @@ class _HomePageState extends State<HomePage> {
     if (value.state == "DISCONNECTED") {
       getDomain();
     } else {
-      // قطع اتصال
+      if (v2rayClient == null) return;
+      
       setState(() {
         isLoading = true;
       });
       
       try {
-        await v2rayClient.disconnect();
+        await v2rayClient!.disconnect();
         _stopStatsMonitoring();
         print('✅ اتصال قطع شد');
       } catch (e) {
@@ -466,12 +492,8 @@ class _HomePageState extends State<HomePage> {
         blockedApps = prefs.getStringList('blockedApps') ?? [];
       });
 
-      // 🔥 مستقیم به Cloudflare Worker وصل میشیم
       domainName = 'begzar-api.lastofanarchy.workers.dev';
-
-      // 🔄 رفرش لیست سرورها قبل از اتصال
       await _refreshServerList();
-
       checkUpdate();
     } on TimeoutException catch (e) {
       if (mounted) {
@@ -500,7 +522,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // 🔄 تابع رفرش لیست سرورها
   Future<void> _refreshServerList() async {
     try {
       String userKey = await storage.read(key: 'user') ?? '';
@@ -517,7 +538,6 @@ class _HomePageState extends State<HomePage> {
         await storage.write(key: 'user', value: userKey);
       }
 
-      // دریافت لیست سرورها
       final response = await Dio().get(
         "https://$domainName/api/firebase/init/data/$userKey",
         options: Options(
@@ -533,7 +553,6 @@ class _HomePageState extends State<HomePage> {
           servers.add({'name': server['name'], 'config': server['config']});
         }
 
-        // ذخیره لیست جدید
         SharedPreferences prefs = await SharedPreferences.getInstance();
         await prefs.setString('servers_list', jsonEncode(servers));
       }
@@ -544,7 +563,6 @@ class _HomePageState extends State<HomePage> {
 
   void checkUpdate() async {
     try {
-      // 🔑 دریافت یا ساخت User Key
       String userKey = await storage.read(key: 'user') ?? '';
       if (userKey == '') {
         final response = await Dio()
@@ -568,7 +586,6 @@ class _HomePageState extends State<HomePage> {
         await storage.write(key: 'user', value: key);
       }
 
-      // 📡 دریافت لیست سرورها
       final response = await Dio()
           .get(
         "https://$domainName/api/firebase/init/data/$userKey",
@@ -590,7 +607,6 @@ class _HomePageState extends State<HomePage> {
         final version = dataJson['version'];
         final updateUrl = dataJson['updated_url'];
 
-        // 🔥 دریافت سرورها با نام
         List<dynamic> serversJson = dataJson['servers'];
         List<Map<String, String>> servers = [];
 
@@ -598,15 +614,12 @@ class _HomePageState extends State<HomePage> {
           servers.add({'name': server['name'], 'config': server['config']});
         }
 
-        // ذخیره لیست سرورها
         SharedPreferences prefs = await SharedPreferences.getInstance();
         await prefs.setString('servers_list', jsonEncode(servers));
 
-        // ✅ چک ورژن
         if (version == versionName) {
           await connect(servers);
         } else {
-          // 🔄 نمایش دیالوگ آپدیت
           if (updateUrl.isNotEmpty) {
             AwesomeDialog(
               context: context,
@@ -682,7 +695,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> connect(List<Map<String, String>> serverList) async {
-    if (serverList.isEmpty) {
+    if (serverList.isEmpty || v2rayClient == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -703,7 +716,6 @@ class _HomePageState extends State<HomePage> {
 
     List<Map<String, String>> filteredServers = [];
 
-    // 🎯 فیلتر کردن سرورها
     if (selectedServer == 'Automatic') {
       if (serverList.isNotEmpty) {
         filteredServers.add(serverList[0]);
@@ -742,7 +754,6 @@ class _HomePageState extends State<HomePage> {
       print('📄 کانفیگ کامل:');
       print('   ${server['config']}');
       
-      // Parse با API جدید
       final v2rayUrl = V2RayURL.parse(server['config']!);
       final config = v2rayUrl.config;
       
@@ -750,9 +761,8 @@ class _HomePageState extends State<HomePage> {
       print('📊 جزئیات Parse شده:');
       print('   - Protocol: ${config['outbounds'][0]['protocol']}');
       
-      // درخواست دسترسی
       print('🚀 شروع اتصال...');
-      final permissionGranted = await v2rayClient.requestPermission();
+      final permissionGranted = await v2rayClient!.requestPermission();
       
       if (!permissionGranted) {
         throw Exception('VPN permission denied');
@@ -761,8 +771,7 @@ class _HomePageState extends State<HomePage> {
       print('✅ دسترسی VPN داده شد');
       print('🔌 در حال اتصال به V2Ray...');
       
-      // اتصال
-      await v2rayClient.connect(
+      await v2rayClient!.connect(
         config: config,
         proxyOnly: false,
       );
@@ -770,16 +779,14 @@ class _HomePageState extends State<HomePage> {
       print('✅ V2Ray service شروع شد');
       print('⏳ منتظر اتصال...');
       
-      // صبر برای اتصال
       await Future.delayed(Duration(seconds: 2));
       
-      final state = await v2rayClient.getState();
+      final state = await v2rayClient!.getState();
       print('🔍 وضعیت اتصال: $state');
       
       if (state == 'connected') {
         print('🎉 اتصال برقرار شد!');
         
-        // تست Ping
         Future.delayed(Duration(seconds: 2), () {
           delay();
         });
@@ -800,7 +807,7 @@ class _HomePageState extends State<HomePage> {
       }
       
       try {
-        await v2rayClient.disconnect();
+        await v2rayClient!.disconnect();
       } catch (_) {}
     }
 
@@ -810,9 +817,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   void delay() async {
-    if (connectionState == 'connected') {
+    if (connectionState == 'connected' && v2rayClient != null) {
       try {
-        // دریافت کانفیگ فعلی
         SharedPreferences prefs = await SharedPreferences.getInstance();
         String? serverListJson = prefs.getString('servers_list');
         
@@ -827,7 +833,7 @@ class _HomePageState extends State<HomePage> {
           final v2rayUrl = V2RayURL.parse(server['config']);
           final config = v2rayUrl.config;
           
-          int ping = await v2rayClient.delay(config);
+          int ping = await v2rayClient!.delay(config);
           
           setState(() {
             connectedServerDelay = ping;
@@ -849,26 +855,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _stopStatsMonitoring();
-    v2rayClient.dispose();
+    _stateTimer?.cancel();
+    v2rayClient?.dispose();
     super.dispose();
   }
-}
-
-// کلاس V2RayStatus برای سازگاری با Widget های قدیمی
-class V2RayStatus {
-  final String state;
-  final String upload;
-  final String download;
-  final String uploadSpeed;
-  final String downloadSpeed;
-  final String duration;
-
-  V2RayStatus({
-    this.state = 'DISCONNECTED',
-    this.upload = '0',
-    this.download = '0',
-    this.uploadSpeed = '0',
-    this.downloadSpeed = '0',
-    this.duration = '00:00:00',
-  });
 }
