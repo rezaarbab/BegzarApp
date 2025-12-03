@@ -50,7 +50,7 @@ class _ServerSelectionModalState extends State<ServerSelectionModal> {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String? userKey = prefs.getString('user_key');
       
-      if (userKey == null) {
+      if (userKey == null || userKey.isEmpty) {
         // دریافت User Key
         final keyResponse = await Dio().get(
           "https://begzar-api.lastofanarchy.workers.dev/api/firebase/init/android",
@@ -59,7 +59,7 @@ class _ServerSelectionModalState extends State<ServerSelectionModal> {
           ),
         ).timeout(Duration(seconds: 8));
         
-        userKey = keyResponse.data['key'];
+        userKey = keyResponse.data['key'] as String;
         await prefs.setString('user_key', userKey);
       }
 
@@ -77,8 +77,8 @@ class _ServerSelectionModalState extends State<ServerSelectionModal> {
         
         for (var server in serversJson) {
           servers.add({
-            'name': server['name'],
-            'config': server['config']
+            'name': server['name'].toString(),
+            'config': server['config'].toString()
           });
         }
         
@@ -87,7 +87,7 @@ class _ServerSelectionModalState extends State<ServerSelectionModal> {
         
         // آپدیت UI
         setState(() {
-          serverNames = servers.map((s) => s['name'].toString()).toList();
+          serverNames = servers.map((s) => s['name']!).toList();
         });
 
         if (mounted) {
