@@ -13,32 +13,13 @@ import 'package:dio/dio.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_v2ray_client/flutter_v2ray_client.dart';
+import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:lottie/lottie.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../common/theme.dart';
-
-// کلاس V2RayStatus برای سازگاری
-class V2RayStatus {
-  final String state;
-  final String upload;
-  final String download;
-  final String uploadSpeed;
-  final String downloadSpeed;
-  final String duration;
-
-  V2RayStatus({
-    this.state = 'DISCONNECTED',
-    this.upload = '0',
-    this.download = '0',
-    this.uploadSpeed = '0',
-    this.downloadSpeed = '0',
-    this.duration = '00:00:00',
-  });
-}
 
 class HomePage extends StatefulWidget {
   HomePage({super.key});
@@ -48,18 +29,12 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // V2Ray Client
-  V2RayClient? v2rayClient;
-  String connectionState = 'DISCONNECTED';
-  Timer? _statsTimer;
-  Timer? _stateTimer;
-  
-  // Stats
-  int uploadSpeed = 0;
-  int downloadSpeed = 0;
-  int upload = 0;
-  int download = 0;
-  String duration = '00:00:00';
+  var v2rayStatus = ValueNotifier<V2RayStatus>(V2RayStatus());
+  late final FlutterV2ray flutterV2ray = FlutterV2ray(
+    onStatusChanged: (status) {
+      v2rayStatus.value = status;
+    },
+  );
 
   bool proxyOnly = false;
   List<String> bypassSubnets = [];
@@ -77,109 +52,26 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _initializeV2Ray();
     getVersionName();
     _loadServerSelection();
-    coreVersion = 'V2Ray Core';
-    setState(() {});
-  }
+    flutterV2ray
+        .initializeV2Ray(
+      notificationIconResourceType: "mipmap",
+      notificationIconResourceName: "launcher_icon",
+    )
+        .then((value) async {
+      coreVersion = await flutterV2ray.getCoreVersion();
 
-  Future<void> _initializeV2Ray() async {
-    try {
-      v2rayClient = V2RayClient();
-      _checkConnectionState();
-    } catch (e) {
-      print('Error initializing V2Ray: $e');
-    }
-  }
-
-  // چک کردن وضعیت اتصال
-  void _checkConnectionState() {
-    _stateTimer?.cancel();
-    _stateTimer = Timer.periodic(Duration(seconds: 1), (timer) async {
-      if (!mounted || v2rayClient == null) {
-        timer.cancel();
-        return;
-      }
-      
-      try {
-        final state = await v2rayClient!.getState();
-        
-        if (state != connectionState) {
-          setState(() {
-            connectionState = state;
-          });
-          
-          if (state == 'connected') {
-            _startStatsMonitoring();
-            Future.delayed(Duration(seconds: 2), () {
-              delay();
-            });
-          } else if (state == 'disconnected') {
-            _stopStatsMonitoring();
-            setState(() {
-              connectedServerDelay = null;
-            });
+      setState(() {});
+      Future.delayed(
+        Duration(seconds: 1),
+        () {
+          if (v2rayStatus.value.state == 'CONNECTED') {
+            delay();
           }
-        }
-      } catch (e) {
-        print('Error checking state: $e');
-      }
+        },
+      );
     });
-  }
-
-  void _startStatsMonitoring() {
-    _statsTimer?.cancel();
-    
-    _statsTimer = Timer.periodic(Duration(seconds: 1), (timer) async {
-      if (!mounted || v2rayClient == null) {
-        timer.cancel();
-        return;
-      }
-      
-      try {
-        final stats = await v2rayClient!.getStats();
-        
-        setState(() {
-          upload = stats.upload;
-          download = stats.download;
-          uploadSpeed = stats.upload;
-          downloadSpeed = stats.download;
-          
-          int seconds = stats.duration;
-          int hours = seconds ~/ 3600;
-          int minutes = (seconds % 3600) ~/ 60;
-          int secs = seconds % 60;
-          duration = '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
-        });
-        
-      } catch (e) {
-        print('Error getting stats: $e');
-      }
-    });
-  }
-
-  void _stopStatsMonitoring() {
-    _statsTimer?.cancel();
-    _statsTimer = null;
-    setState(() {
-      upload = 0;
-      download = 0;
-      uploadSpeed = 0;
-      downloadSpeed = 0;
-      duration = '00:00:00';
-    });
-  }
-
-  V2RayStatus _createMockStatus() {
-    return V2RayStatus(
-      state: connectionState.toUpperCase(),
-      upload: upload.toString(),
-      download: download.toString(),
-      uploadSpeed: uploadSpeed.toString(),
-      downloadSpeed: downloadSpeed.toString(),
-      duration: duration,
-    );
   }
 
   @override
@@ -228,9 +120,9 @@ class _HomePageState extends State<HomePage> {
             ),
             Expanded(
               child: Center(
-                child: Builder(
-                  builder: (context) {
-                    final value = _createMockStatus();
+                child: ValueListenableBuilder(
+                  valueListenable: v2rayStatus,
+                  builder: (context, value, child) {
                     final size = MediaQuery.sizeOf(context);
                     final bool isWideScreen = size.width > 600;
                     return isWideScreen
@@ -262,10 +154,10 @@ class _HomePageState extends State<HomePage> {
                                   if (value.state == 'CONNECTED') ...[
                                     Expanded(
                                       child: VpnCard(
-                                        download: value.download,
-                                        upload: value.upload,
-                                        downloadSpeed: value.downloadSpeed,
-                                        uploadSpeed: value.uploadSpeed,
+                                        download: int.parse(value.download),
+                                        upload: int.parse(value.upload),
+                                        downloadSpeed: int.parse(value.downloadSpeed),
+                                        uploadSpeed: int.parse(value.uploadSpeed),
                                         selectedServer: selectedServer,
                                         selectedServerLogo:
                                             selectedServerLogo ??
@@ -291,10 +183,10 @@ class _HomePageState extends State<HomePage> {
                                 _buildDelayIndicator(),
                                 const SizedBox(height: 60),
                                 VpnCard(
-                                  download: value.download,
-                                  upload: value.upload,
-                                  downloadSpeed: value.downloadSpeed,
-                                  uploadSpeed: value.uploadSpeed,
+                                  download: int.parse(value.download),
+                                  upload: int.parse(value.upload),
+                                  downloadSpeed: int.parse(value.downloadSpeed),
+                                  uploadSpeed: int.parse(value.uploadSpeed),
                                   selectedServer: selectedServer,
                                   selectedServerLogo: selectedServerLogo ??
                                       'assets/lottie/auto.json',
@@ -382,23 +274,7 @@ class _HomePageState extends State<HomePage> {
     if (value.state == "DISCONNECTED") {
       getDomain();
     } else {
-      if (v2rayClient == null) return;
-      
-      setState(() {
-        isLoading = true;
-      });
-      
-      try {
-        await v2rayClient!.disconnect();
-        _stopStatsMonitoring();
-        print('✅ اتصال قطع شد');
-      } catch (e) {
-        print('❌ خطا در قطع اتصال: $e');
-      }
-      
-      setState(() {
-        isLoading = false;
-      });
+      flutterV2ray.stopV2Ray();
     }
   }
 
@@ -412,15 +288,19 @@ class _HomePageState extends State<HomePage> {
         return ServerSelectionModal(
           selectedServer: selectedServer,
           onServerSelected: (server) {
-            if (connectionState == "DISCONNECTED") {
-              String logoPath = server == 'Automatic'
-                  ? 'assets/lottie/auto.json'
-                  : 'assets/lottie/server.json';
-
+            if (v2rayStatus.value.state == "DISCONNECTED") {
+              String? logoPath;
+              if (server == 'Automatic') {
+                logoPath = 'assets/lottie/auto.json';
+              } else if (server == 'Server 1') {
+                logoPath = 'assets/lottie/server.json';
+              } else if (server == 'Server 2') {
+                logoPath = 'assets/lottie/server.json';
+              }
               setState(() {
                 selectedServer = server;
               });
-              _saveServerSelection(server, logoPath);
+              _saveServerSelection(server, logoPath!);
               Navigator.pop(context);
             } else {
               if (mounted) {
@@ -446,8 +326,6 @@ class _HomePageState extends State<HomePage> {
       return 'server_1';
     } else if (selectedServer == 'Server 2') {
       return 'server_2';
-    } else if (selectedServer == 'Server 3') {
-      return 'server_3';
     } else {
       return 'auto';
     }
@@ -491,9 +369,13 @@ class _HomePageState extends State<HomePage> {
         isLoading = true;
         blockedApps = prefs.getStringList('blockedApps') ?? [];
       });
-
-      domainName = 'begzar-api.lastofanarchy.workers.dev';
-      await _refreshServerList();
+      final response = await httpClient.get('').timeout(
+        Duration(seconds: 8),
+        onTimeout: () {
+          throw TimeoutException(context.tr('error_timeout'));
+        },
+      );
+      domainName = response.data;
       checkUpdate();
     } on TimeoutException catch (e) {
       if (mounted) {
@@ -502,7 +384,9 @@ class _HomePageState extends State<HomePage> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.message!),
+            content: Text(
+              e.message!,
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -522,47 +406,25 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _refreshServerList() async {
+  String decrypt(String secureData, String x1, String x2, String key) {
+    final encryptedData = {
+      'ciphertext': secureData,
+      'nonce': x1,
+      'tag': x2
+    };
+    final savedKey = key;
     try {
-      String userKey = await storage.read(key: 'user') ?? '';
-
-      if (userKey == '') {
-        final response = await Dio().get(
-          "https://$domainName/api/firebase/init/android",
-          options: Options(
-            headers: {'X-Content-Type-Options': 'nosniff'},
-          ),
-        ).timeout(Duration(seconds: 8));
-
-        userKey = response.data['key'];
-        await storage.write(key: 'user', value: userKey);
-      }
-
-      final response = await Dio().get(
-        "https://$domainName/api/firebase/init/data/$userKey",
-        options: Options(
-          headers: {'X-Content-Type-Options': 'nosniff'},
-        ),
-      ).timeout(Duration(seconds: 8));
-
-      if (response.data['status'] == true) {
-        List<dynamic> serversJson = response.data['servers'];
-        List<Map<String, String>> servers = [];
-
-        for (var server in serversJson) {
-          servers.add({'name': server['name'], 'config': server['config']});
-        }
-
-        SharedPreferences prefs = await SharedPreferences.getInstance();
-        await prefs.setString('servers_list', jsonEncode(servers));
-      }
+      final decrypted = Decryptor.decryptChaCha20(encryptedData, savedKey);
+      return decrypted.toString();
     } catch (e) {
-      print('Error refreshing server list: $e');
+      return 'Error during decryption: $e';
     }
   }
 
   void checkUpdate() async {
     try {
+      final serverParam = getServerParam();
+
       String userKey = await storage.read(key: 'user') ?? '';
       if (userKey == '') {
         final response = await Dio()
@@ -584,6 +446,8 @@ class _HomePageState extends State<HomePage> {
         final key = dataJson['key'];
         userKey = key;
         await storage.write(key: 'user', value: key);
+      } else {
+        userKey = await storage.read(key: 'user') ?? '';
       }
 
       final response = await Dio()
@@ -601,21 +465,17 @@ class _HomePageState extends State<HomePage> {
           throw TimeoutException(context.tr('error_timeout'));
         },
       );
-
       if (response.data['status'] == true) {
         final dataJson = response.data;
+        final secureData = dataJson['data']['secure'];
+        final x1 = dataJson['data']['x1'];
+        final x2 = dataJson['data']['x2'];
         final version = dataJson['version'];
         final updateUrl = dataJson['updated_url'];
 
-        List<dynamic> serversJson = dataJson['servers'];
-        List<Map<String, String>> servers = [];
+        final serverEncode = decrypt(secureData, x1, x2, userKey);
 
-        for (var server in serversJson) {
-          servers.add({'name': server['name'], 'config': server['config']});
-        }
-
-        SharedPreferences prefs = await SharedPreferences.getInstance();
-        await prefs.setString('servers_list', jsonEncode(servers));
+        List<String> servers = LineSplitter.split(serverEncode).toList();
 
         if (version == versionName) {
           await connect(servers);
@@ -629,8 +489,7 @@ class _HomePageState extends State<HomePage> {
               dialogBackgroundColor: Colors.white,
               btnCancelOnPress: () {},
               btnOkOnPress: () async {
-                await launchUrl(
-                    Uri.parse(utf8.decode(base64Decode(updateUrl))),
+                await launchUrl(Uri.parse(utf8.decode(base64Decode(updateUrl))),
                     mode: LaunchMode.externalApplication);
               },
               btnOkText: context.tr('download'),
@@ -642,6 +501,17 @@ class _HomePageState extends State<HomePage> {
               descTextStyle: TextStyle(
                   fontFamily: 'sm', color: Colors.black, fontSize: 14),
             )..show();
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    context.tr('update_install'),
+                  ),
+                  behavior: SnackBarBehavior.floating(),
+                ),
+              );
+            }
           }
         }
       } else {
@@ -694,12 +564,14 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> connect(List<Map<String, String>> serverList) async {
-    if (serverList.isEmpty || v2rayClient == null) {
+  Future<void> connect(List<String> serverList) async {
+    if (serverList.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(context.tr('error_no_server_connected')),
+            content: Text(
+              context.tr('error_no_server_connected'),
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -714,149 +586,82 @@ class _HomePageState extends State<HomePage> {
       isLoading = true;
     });
 
-    List<Map<String, String>> filteredServers = [];
+    List<String> list = [];
 
-    if (selectedServer == 'Automatic') {
-      if (serverList.isNotEmpty) {
-        filteredServers.add(serverList[0]);
-        print('🔄 Automatic mode - انتخاب اولین سرور: ${serverList[0]['name']}');
+    serverList.forEach((element) {
+      final V2RayURL v2rayURL = FlutterV2ray.parseFromURL(element);
+      list.add(v2rayURL.getFullConfiguration());
+    });
+
+    Map<String, dynamic> getAllDelay =
+        jsonDecode(await flutterV2ray.getAllServerDelay(configs: list));
+
+    list.clear();
+
+    int minPing = 99999999;
+    String bestConfig = '';
+
+    getAllDelay.forEach(
+      (key, value) {
+        if (value < minPing && value != -1) {
+          setState(() {
+            bestConfig = key;
+            minPing = value;
+          });
+        }
+      },
+    );
+
+    if (bestConfig.isNotEmpty) {
+      if (await flutterV2ray.requestPermission()) {
+        flutterV2ray.startV2Ray(
+          remark: context.tr('app_title'),
+          config: bestConfig,
+          proxyOnly: false,
+          bypassSubnets: null,
+          notificationDisconnectButtonName: context.tr('disconnect_btn'),
+          blockedApps: blockedApps,
+        );
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(context.tr('error_permission')),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       }
     } else {
-      var found = serverList.where((s) => s['name'] == selectedServer).toList();
-      if (found.isNotEmpty) {
-        filteredServers.add(found[0]);
-        print('✅ سرور انتخاب شده: ${found[0]['name']}');
-      } else {
-        print('❌ سرور "$selectedServer" پیدا نشد!');
-      }
-    }
-
-    if (filteredServers.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('سرور "$selectedServer" موجود نیست'),
+            content: Text(
+              context.tr('error_no_server_connected'),
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
-      setState(() {
-        isLoading = false;
-      });
-      return;
     }
-
-    print('📡 شروع Parse کانفیگ...');
-
-    try {
-      var server = filteredServers[0];
-      print('🔧 Parse: ${server['name']}');
-      print('📄 کانفیگ کامل:');
-      print('   ${server['config']}');
-      
-      final v2rayUrl = V2RayURL.parse(server['config']!);
-      final config = v2rayUrl.config;
-      
-      print('✅ Parse موفق: ${server['name']}');
-      print('📊 جزئیات Parse شده:');
-      print('   - Protocol: ${config['outbounds'][0]['protocol']}');
-      
-      print('🚀 شروع اتصال...');
-      final permissionGranted = await v2rayClient!.requestPermission();
-      
-      if (!permissionGranted) {
-        throw Exception('VPN permission denied');
-      }
-      
-      print('✅ دسترسی VPN داده شد');
-      print('🔌 در حال اتصال به V2Ray...');
-      
-      await v2rayClient!.connect(
-        config: config,
-        proxyOnly: false,
-      );
-      
-      print('✅ V2Ray service شروع شد');
-      print('⏳ منتظر اتصال...');
-      
-      await Future.delayed(Duration(seconds: 2));
-      
-      final state = await v2rayClient!.getState();
-      print('🔍 وضعیت اتصال: $state');
-      
-      if (state == 'connected') {
-        print('🎉 اتصال برقرار شد!');
-        
-        Future.delayed(Duration(seconds: 2), () {
-          delay();
-        });
-      }
-      
-    } catch (e, stackTrace) {
-      print('❌ خطا در اتصال: $e');
-      print('📚 StackTrace:');
-      print(stackTrace.toString());
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('خطا در اتصال: $e'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-      
-      try {
-        await v2rayClient!.disconnect();
-      } catch (_) {}
-    }
-
+    Future.delayed(
+      Duration(seconds: 1),
+      () {
+        delay();
+      },
+    );
     setState(() {
       isLoading = false;
     });
   }
 
   void delay() async {
-    if (connectionState == 'connected' && v2rayClient != null) {
-      try {
-        SharedPreferences prefs = await SharedPreferences.getInstance();
-        String? serverListJson = prefs.getString('servers_list');
-        
-        if (serverListJson != null) {
-          List<dynamic> serverList = jsonDecode(serverListJson);
-          
-          var server = serverList.firstWhere(
-            (s) => s['name'] == selectedServer,
-            orElse: () => serverList[0],
-          );
-          
-          final v2rayUrl = V2RayURL.parse(server['config']);
-          final config = v2rayUrl.config;
-          
-          int ping = await v2rayClient!.delay(config);
-          
-          setState(() {
-            connectedServerDelay = ping;
-            isFetchingPing = true;
-          });
-          
-          print('📶 Ping: $ping ms');
-        }
-      } catch (e) {
-        print('⚠️ Ping failed: $e');
-        setState(() {
-          connectedServerDelay = null;
-        });
-      }
+    if (v2rayStatus.value.state == 'CONNECTED') {
+      connectedServerDelay = await flutterV2ray.getConnectedServerDelay();
+      setState(() {
+        isFetchingPing = true;
+      });
     }
     if (!mounted) return;
-  }
-
-  @override
-  void dispose() {
-    _stopStatsMonitoring();
-    _stateTimer?.cancel();
-    v2rayClient?.dispose();
-    super.dispose();
   }
 }
