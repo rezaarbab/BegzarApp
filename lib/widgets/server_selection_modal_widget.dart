@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class ServerSelectionModal extends StatelessWidget {
+class ServerSelectionModal extends StatefulWidget {
   final String selectedServer;
   final Function(String) onServerSelected;
   
@@ -10,6 +12,31 @@ class ServerSelectionModal extends StatelessWidget {
     required this.selectedServer, 
     required this.onServerSelected
   });
+
+  @override
+  State<ServerSelectionModal> createState() => _ServerSelectionModalState();
+}
+
+class _ServerSelectionModalState extends State<ServerSelectionModal> {
+  List<String> serverNames = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadServers();
+  }
+
+  Future<void> _loadServers() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? serversJson = prefs.getString('servers_list');
+    
+    if (serversJson != null) {
+      List<dynamic> servers = jsonDecode(serversJson);
+      setState(() {
+        serverNames = servers.map((s) => s['name'].toString()).toList();
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,51 +60,27 @@ class ServerSelectionModal extends StatelessWidget {
             ListTile(
               leading: Lottie.asset('assets/lottie/auto.json', width: 30),
               title: Text('Automatic'),
-              trailing: selectedServer == 'Automatic'
+              trailing: widget.selectedServer == 'Automatic'
                   ? Icon(Icons.check, color: Colors.green)
                   : null,
-              onTap: () => onServerSelected('Automatic'),
+              onTap: () => widget.onServerSelected('Automatic'),
             ),
             Divider(),
             
-            // Server 1
-            ListTile(
-              leading: Lottie.asset('assets/lottie/server.json', width: 32),
-              title: Text(
-                'Server 1',
-                style: TextStyle(fontFamily: 'GM'),
-              ),
-              trailing: selectedServer == 'Server 1'
-                  ? Icon(Icons.check, color: Colors.green)
-                  : null,
-              onTap: () => onServerSelected('Server 1'),
-            ),
-            
-            // Server 2
-            ListTile(
-              leading: Lottie.asset('assets/lottie/server.json', width: 32),
-              title: Text(
-                'Server 2',
-                style: TextStyle(fontFamily: 'GM'),
-              ),
-              trailing: selectedServer == 'Server 2'
-                  ? Icon(Icons.check, color: Colors.green)
-                  : null,
-              onTap: () => onServerSelected('Server 2'),
-            ),
-            
-            // Server 3 - جدید اضافه شد
-            ListTile(
-              leading: Lottie.asset('assets/lottie/server.json', width: 32),
-              title: Text(
-                'Server 3',
-                style: TextStyle(fontFamily: 'GM'),
-              ),
-              trailing: selectedServer == 'Server 3'
-                  ? Icon(Icons.check, color: Colors.green)
-                  : null,
-              onTap: () => onServerSelected('Server 3'),
-            ),
+            // سرورهای داینامیک
+            ...serverNames.map((serverName) {
+              return ListTile(
+                leading: Lottie.asset('assets/lottie/server.json', width: 32),
+                title: Text(
+                  serverName,
+                  style: TextStyle(fontFamily: 'GM'),
+                ),
+                trailing: widget.selectedServer == serverName
+                    ? Icon(Icons.check, color: Colors.green)
+                    : null,
+                onTap: () => widget.onServerSelected(serverName),
+              );
+            }).toList(),
           ],
         ),
       ),
