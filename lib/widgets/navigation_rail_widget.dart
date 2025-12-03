@@ -111,6 +111,7 @@ class _NavigationRailWidgetState extends State<NavigationRailWidget> {
           ),
           const Spacer(),
           _buildNavItems(isExtraWideScreen),
+          // const SizedBox(height: 16),
         ],
       ),
     );
