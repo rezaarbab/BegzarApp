@@ -583,122 +583,124 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+
+
+
   Future<void> connect(List<Map<String, String>> serverList) async {
-    if (serverList.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(context.tr('error_no_server_connected')),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-      setState(() {
-        isLoading = false;
-      });
-      return;
+  if (serverList.isEmpty) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.tr('error_no_server_connected')),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
-
     setState(() {
-      isLoading = true;
+      isLoading = false;
     });
+    return;
+  }
 
-    List<Map<String, String>> filteredServers = [];
+  setState(() {
+    isLoading = true;
+  });
 
-    // 🎯 فیلتر کردن سرورها
-    if (selectedServer == 'Automatic') {
-      filteredServers = serverList;
-      print('🔄 Automatic mode - تست ${serverList.length} سرور');
+  List<Map<String, String>> filteredServers = [];
+
+  // 🎯 فیلتر کردن سرورها
+  if (selectedServer == 'Automatic') {
+    // Automatic: فقط اولین سرور رو انتخاب میکنیم (بدون تست ping)
+    if (serverList.isNotEmpty) {
+      filteredServers.add(serverList[0]);
+      print('🔄 Automatic mode - انتخاب اولین سرور: ${serverList[0]['name']}');
+    }
+  } else {
+    var found = serverList.where((s) => s['name'] == selectedServer).toList();
+    if (found.isNotEmpty) {
+      filteredServers.add(found[0]);
+      print('✅ سرور انتخاب شده: ${found[0]['name']}');
     } else {
-      var found = serverList.where((s) => s['name'] == selectedServer).toList();
-      if (found.isNotEmpty) {
-        filteredServers.add(found[0]);
-        print('✅ سرور انتخاب شده: ${found[0]['name']}');
-      } else {
-        print('❌ سرور "$selectedServer" پیدا نشد!');
-      }
+      print('❌ سرور "$selectedServer" پیدا نشد!');
     }
+  }
 
-    if (filteredServers.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('سرور "$selectedServer" موجود نیست'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-      setState(() {
-        isLoading = false;
-      });
-      return;
+  if (filteredServers.isEmpty) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('سرور "$selectedServer" موجود نیست'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
+    setState(() {
+      isLoading = false;
+    });
+    return;
+  }
 
-    List<String> configList = [];
+  print('📡 شروع Parse کانفیگ...');
 
-    print('📡 شروع Parse کانفیگ‌ها...');
-
-    // تبدیل URL به کانفیگ
-    for (var server in filteredServers) {
-      try {
-        print('🔧 Parse: ${server['name']}');
-        print('   URL: ${server['config']!.substring(0, 50)}...');
-
-        final V2RayURL v2rayURL = FlutterV2ray.parseFromURL(server['config']!);
-        String fullConfig = v2rayURL.getFullConfiguration();
-
-        configList.add(fullConfig);
-        print('✅ Parse موفق: ${server['name']}');
-      } catch (e) {
-        print('❌ خطا در Parse ${server['name']}: $e');
-      }
+  // تبدیل URL به کانفیگ
+  String? configToConnect;
+  
+  try {
+    var server = filteredServers[0];
+    print('🔧 Parse: ${server['name']}');
+    print('   URL: ${server['config']!.substring(0, Math.min(50, server['config']!.length))}...');
+    
+    final V2RayURL v2rayURL = FlutterV2ray.parseFromURL(server['config']!);
+    configToConnect = v2rayURL.getFullConfiguration();
+    
+    print('✅ Parse موفق: ${server['name']}');
+    print('📄 Config length: ${configToConnect.length} chars');
+  } catch (e) {
+    print('❌ خطا در Parse: $e');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('خطا در پردازش کانفیگ: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
+    setState(() {
+      isLoading = false;
+    });
+    return;
+  }
 
-    if (configList.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('خطا در پردازش کانفیگ سرورها'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-      setState(() {
-        isLoading = false;
-      });
-      return;
-    }
-
-    print('📊 تعداد کانفیگ‌های آماده: ${configList.length}');
-
-    // 🚀 اگر فقط یک سرور انتخاب شده
-    if (configList.length == 1) {
-      print('🚀 اتصال مستقیم به سرور...');
-      String bestConfig = configList[0];
-
+  // 🚀 اتصال مستقیم
+  if (configToConnect != null && configToConnect.isNotEmpty) {
+    print('🚀 شروع اتصال...');
+    
+    try {
       if (await flutterV2ray.requestPermission()) {
         print('✅ دسترسی VPN داده شد');
-        try {
-          flutterV2ray.startV2Ray(
-            remark: context.tr('app_title'),
-            config: bestConfig,
-            proxyOnly: false,
-            bypassSubnets: null,
-            notificationDisconnectButtonName: context.tr('disconnect_btn'),
-            blockedApps: blockedApps,
-          );
-          print('✅ V2Ray شروع شد');
-        } catch (e) {
-          print('❌ خطا در شروع V2Ray: $e');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('خطا در اتصال: $e'),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          }
+        
+        await flutterV2ray.startV2Ray(
+          remark: context.tr('app_title'),
+          config: configToConnect,
+          proxyOnly: false,
+          bypassSubnets: null,
+          notificationDisconnectButtonName: context.tr('disconnect_btn'),
+          blockedApps: blockedApps,
+        );
+        
+        print('✅ V2Ray service شروع شد');
+        print('⏳ منتظر اتصال...');
+        
+        // صبر کن تا متصل بشه
+        await Future.delayed(Duration(seconds: 2));
+        
+        // چک کردن وضعیت
+        if (v2rayStatus.value.state == 'CONNECTED') {
+          print('🎉 اتصال برقرار شد!');
+        } else {
+          print('⚠️ هنوز در حال اتصال... (${v2rayStatus.value.state})');
         }
+        
       } else {
         print('❌ دسترسی VPN رد شد');
         if (mounted) {
@@ -710,87 +712,36 @@ class _HomePageState extends State<HomePage> {
           );
         }
       }
-    } else {
-      // 🎯 Automatic mode - تست ping
-      print('🎯 Automatic mode - شروع تست ping...');
-
-      try {
-        Map<String, dynamic> getAllDelay =
-            jsonDecode(await flutterV2ray.getAllServerDelay(configs: configList));
-
-        print('📊 نتایج Ping:');
-        getAllDelay.forEach((key, value) {
-          print(
-              '   Config ${getAllDelay.keys.toList().indexOf(key) + 1}: ${value}ms');
-        });
-
-        int minPing = 99999999;
-        String bestConfig = '';
-
-        getAllDelay.forEach((key, value) {
-          if (value < minPing && value != -1) {
-            bestConfig = key;
-            minPing = value;
-          }
-        });
-
-        if (bestConfig.isNotEmpty) {
-          print('🎯 بهترین سرور: Ping = ${minPing}ms');
-
-          if (await flutterV2ray.requestPermission()) {
-            flutterV2ray.startV2Ray(
-              remark: context.tr('app_title'),
-              config: bestConfig,
-              proxyOnly: false,
-              bypassSubnets: null,
-              notificationDisconnectButtonName: context.tr('disconnect_btn'),
-              blockedApps: blockedApps,
-            );
-            print('✅ اتصال به بهترین سرور');
-          } else {
-            print('❌ دسترسی VPN رد شد');
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(context.tr('error_permission')),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            }
-          }
-        } else {
-          print('❌ هیچ سرور فعالی یافت نشد');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('هیچ سرور فعالی یافت نشد. همه سرورها Timeout شدند.'),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          }
-        }
-      } catch (e) {
-        print('❌ خطا در تست ping: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('خطا در تست سرورها: $e'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
+    } catch (e) {
+      print('❌ خطا در اتصال: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطا در اتصال: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     }
-
-    Future.delayed(Duration(seconds: 1), () {
-      delay();
-    });
-
-    setState(() {
-      isLoading = false;
-    });
   }
 
+  Future.delayed(Duration(seconds: 3), () {
+    delay();
+  });
+
+  setState(() {
+    isLoading = false;
+  });
+}
+
+
+
+
+
+
+  
+
+   
   void delay() async {
     if (v2rayStatus.value.state == 'CONNECTED') {
       connectedServerDelay = await flutterV2ray.getConnectedServerDelay();
