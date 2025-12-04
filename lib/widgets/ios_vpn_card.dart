@@ -125,17 +125,15 @@ class _IOSVpnCardState extends State<IOSVpnCard> {
                         color: Color(0xFF007AFF),
                       ),
                       SizedBox(width: 6),
-                      Directionality(
+                      Text(
+                        widget.duration,
                         textDirection: TextDirection.ltr,
-                        child: Text(
-                          widget.duration,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: -0.24,
-                            color: Colors.black,
-                            fontFeatures: [FontFeature.tabularFigures()],
-                          ),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.24,
+                          color: Colors.black,
+                          fontFeatures: [FontFeature.tabularFigures()],
                         ),
                       ),
                     ],
@@ -212,16 +210,14 @@ class _IOSVpnCardState extends State<IOSVpnCard> {
               ),
               SizedBox(width: 6),
             ],
-            Directionality(
+            Text(
+              ipText ?? context.tr('show_ip'),
               textDirection: TextDirection.ltr,
-              child: Text(
-                ipText ?? context.tr('show_ip'),
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: -0.08,
-                  color: Colors.black.withOpacity(0.6),
-                ),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                letterSpacing: -0.08,
+                color: Colors.black.withOpacity(0.6),
               ),
             ),
           ],
@@ -282,17 +278,15 @@ class _IOSVpnCardState extends State<IOSVpnCard> {
                 color: Colors.black.withOpacity(0.4),
               ),
               SizedBox(width: 4),
-              Directionality(
+              Text(
+                download,
                 textDirection: TextDirection.ltr,
-                child: Text(
-                  download,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.24,
-                    color: Colors.black,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.24,
+                  color: Colors.black,
+                  fontFeatures: [FontFeature.tabularFigures()],
                 ),
               ),
             ],
@@ -306,17 +300,15 @@ class _IOSVpnCardState extends State<IOSVpnCard> {
                 color: Colors.black.withOpacity(0.4),
               ),
               SizedBox(width: 4),
-              Directionality(
+              Text(
+                upload,
                 textDirection: TextDirection.ltr,
-                child: Text(
-                  upload,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.24,
-                    color: Colors.black,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.24,
+                  color: Colors.black,
+                  fontFeatures: [FontFeature.tabularFigures()],
                 ),
               ),
             ],
