@@ -175,17 +175,15 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                   if (value.state == 'CONNECTED') ...[
                                     Expanded(
-                                      child: IOSVpnCard(
-                                        download: value.download,
-                                        upload: value.upload,
-                                        downloadSpeed: value.downloadSpeed,
-                                        uploadSpeed: value.uploadSpeed,
-                                        selectedServer: selectedServer,
-                                        selectedServerLogo:
-                                            selectedServerLogo ??
-                                                'assets/lottie/auto.json',
-                                        duration: value.duration,
-                                      ),
+                                  child: IOSVpnCard(
+  download: value.download.toString(),
+  upload: value.upload.toString(),
+  downloadSpeed: value.downloadSpeed.toString(),
+  uploadSpeed: value.uploadSpeed.toString(),
+  selectedServer: selectedServer,
+  selectedServerLogo: selectedServerLogo ?? 'assets/lottie/auto.json',
+  duration: value.duration,
+),
                                     ),
                                   ],
                                 ],
@@ -204,16 +202,15 @@ class _HomePageState extends State<HomePage> {
                                 const SizedBox(height: 16),
                                 _buildDelayIndicator(),
                                 const SizedBox(height: 32),
-                                IOSVpnCard(
-                                  download: value.download,
-                                  upload: value.upload,
-                                  downloadSpeed: value.downloadSpeed,
-                                  uploadSpeed: value.uploadSpeed,
-                                  selectedServer: selectedServer,
-                                  selectedServerLogo: selectedServerLogo ??
-                                      'assets/lottie/auto.json',
-                                  duration: value.duration,
-                                ),
+                       IOSVpnCard(
+  download: value.download.toString(),
+  upload: value.upload.toString(),
+  downloadSpeed: value.downloadSpeed.toString(),
+  uploadSpeed: value.uploadSpeed.toString(),
+  selectedServer: selectedServer,
+  selectedServerLogo: selectedServerLogo ?? 'assets/lottie/auto.json',
+  duration: value.duration,
+),
                               ],
                             ],
                           );
