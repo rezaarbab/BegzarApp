@@ -6,6 +6,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:begzar/common/ios_theme.dart';
 
 class IOSServerSelectionModal extends StatefulWidget {
   final String selectedServer;
@@ -13,7 +14,7 @@ class IOSServerSelectionModal extends StatefulWidget {
   
   const IOSServerSelectionModal({
     super.key,
-    required this.selectedServer, 
+    required this.selectedServer,
     required this.onServerSelected,
   });
 
@@ -23,41 +24,20 @@ class IOSServerSelectionModal extends StatefulWidget {
 
 class _IOSServerSelectionModalState extends State<IOSServerSelectionModal>
     with SingleTickerProviderStateMixin {
-  List<String> serverNames = [];
+  List<Map<String, dynamic>> servers = [];
   bool isLoading = false;
+  bool isRefreshing = false;
   late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
 
   @override
   void initState() {
     super.initState();
     _loadServers();
     
-    // Setup animations
     _animationController = AnimationController(
       vsync: this,
-      duration: Duration(milliseconds: 350),
-    );
-    
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOut,
-      ),
-    );
-    
-    _slideAnimation = Tween<Offset>(
-      begin: Offset(0, 0.1),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOutCubic,
-      ),
-    );
-    
-    _animationController.forward();
+      duration: Duration(milliseconds: 400),
+    )..forward();
   }
 
   @override
@@ -67,25 +47,37 @@ class _IOSServerSelectionModalState extends State<IOSServerSelectionModal>
   }
 
   Future<void> _loadServers() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? serversJson = prefs.getString('servers_list');
+    setState(() => isLoading = true);
     
-    if (serversJson != null) {
-      List<dynamic> servers = jsonDecode(serversJson);
-      setState(() {
-        serverNames = servers.map((s) => s['name'].toString()).toList();
-      });
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      String? serversJson = prefs.getString('servers_list');
+      
+      if (serversJson != null) {
+        List<dynamic> serversList = jsonDecode(serversJson);
+        setState(() {
+          servers = serversList.map((s) {
+            return {
+              'name': s['name'].toString(),
+              'config': s['config'].toString(),
+              'ping': null,
+            };
+          }).toList();
+        });
+      }
+    } catch (e) {
+      print('Error loading servers: $e');
+    } finally {
+      setState(() => isLoading = false);
     }
   }
 
   Future<void> _refreshServers() async {
-    setState(() {
-      isLoading = true;
-    });
+    setState(() => isRefreshing = true);
 
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
-      String? userKey = prefs.getString('user_key');
+      String? userKey = prefs.getString('user');
       
       if (userKey == null || userKey.isEmpty) {
         final keyResponse = await Dio().get(
@@ -96,7 +88,7 @@ class _IOSServerSelectionModalState extends State<IOSServerSelectionModal>
         ).timeout(Duration(seconds: 8));
         
         userKey = keyResponse.data['key'] as String;
-        await prefs.setString('user_key', userKey);
+        await prefs.setString('user', userKey);
       }
 
       final response = await Dio().get(
@@ -108,67 +100,83 @@ class _IOSServerSelectionModalState extends State<IOSServerSelectionModal>
 
       if (response.data['status'] == true) {
         List<dynamic> serversJson = response.data['servers'];
-        List<Map<String, String>> servers = [];
+        List<Map<String, String>> serversList = [];
         
         for (var server in serversJson) {
-          servers.add({
+          serversList.add({
             'name': server['name'].toString(),
-            'config': server['config'].toString()
+            'config': server['config'].toString(),
           });
         }
         
-        await prefs.setString('servers_list', jsonEncode(servers));
+        await prefs.setString('servers_list', jsonEncode(serversList));
+        await prefs.setString('last_server_update', DateTime.now().toIso8601String());
         
-        setState(() {
-          serverNames = servers.map((s) => s['name']!).toList();
-        });
+        await _loadServers();
 
         if (mounted) {
-          _showIOSSnackBar(context, '✓ Servers updated', isSuccess: true);
+          _showSuccessToast('Servers updated successfully');
         }
       }
     } catch (e) {
       if (mounted) {
-        _showIOSSnackBar(context, '✗ Failed to update', isSuccess: false);
+        _showErrorToast('Failed to update servers');
       }
     } finally {
-      setState(() {
-        isLoading = false;
-      });
+      setState(() => isRefreshing = false);
     }
   }
 
-  void _showIOSSnackBar(BuildContext context, String message, {required bool isSuccess}) {
+  void _showSuccessToast(String message) {
+    _showToast(message, IOSColors.systemGreen);
+  }
+
+  void _showErrorToast(String message) {
+    _showToast(message, IOSColors.systemRed);
+  }
+
+  void _showToast(String message, Color color) {
     final overlay = Overlay.of(context);
     final overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
         top: MediaQuery.of(context).padding.top + 16,
-        left: 16,
-        right: 16,
+        left: 20,
+        right: 20,
         child: Material(
           color: Colors.transparent,
           child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             decoration: BoxDecoration(
-              color: isSuccess ? Color(0xFF34C759) : Color(0xFFFF3B30),
-              borderRadius: BorderRadius.circular(10),
+              color: color,
+              borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: Offset(0, 4),
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 20,
+                  offset: Offset(0, 8),
                 ),
               ],
             ),
-            child: Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.24,
-              ),
+            child: Row(
+              children: [
+                Icon(
+                  color == IOSColors.systemGreen
+                      ? CupertinoIcons.checkmark_alt_circle_fill
+                      : CupertinoIcons.xmark_circle_fill,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: IOSTypography.subheadline.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -183,133 +191,147 @@ class _IOSServerSelectionModalState extends State<IOSServerSelectionModal>
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fadeAnimation,
-      child: SlideTransition(
-        position: _slideAnimation,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Color(0xFFF2F2F7),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+    return AnimatedBuilder(
+      animation: _animationController,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(0, (1 - _animationController.value) * 400),
+          child: Opacity(
+            opacity: _animationController.value,
+            child: child,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Handle bar
-              Container(
-                margin: EdgeInsets.only(top: 8),
-                width: 36,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(3),
-                ),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: IOSColors.systemGroupedBackground,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle
+            Container(
+              margin: EdgeInsets.only(top: 10),
+              width: 36,
+              height: 5,
+              decoration: BoxDecoration(
+                color: IOSColors.tertiaryLabel,
+                borderRadius: BorderRadius.circular(3),
               ),
-              
-              // Header
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      context.tr('select_server'),
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.41,
-                        color: Colors.black,
-                      ),
+            ),
+            
+            // Header
+            Padding(
+              padding: EdgeInsets.all(20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    context.tr('select_server'),
+                    style: IOSTypography.title3.copyWith(
+                      color: IOSColors.label,
                     ),
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      minSize: 32,
-                      onPressed: isLoading ? null : _refreshServers,
-                      child: isLoading
-                          ? CupertinoActivityIndicator(radius: 10)
-                          : Icon(
-                              CupertinoIcons.refresh,
-                              color: Color(0xFF007AFF),
-                              size: 22,
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              // Server List
-              Flexible(
-                child: Container(
-                  margin: EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
                   ),
-                  child: ListView(
-                    shrinkWrap: true,
-                    physics: ClampingScrollPhysics(),
+                  CupertinoButton(
                     padding: EdgeInsets.zero,
-                    children: [
-                      // Automatic
-                      _buildServerTile(
-                        icon: 'assets/lottie/auto.json',
-                        title: 'Automatic',
-                        isSelected: widget.selectedServer == 'Automatic',
-                        onTap: () => widget.onServerSelected('Automatic'),
-                        isFirst: true,
-                      ),
-                      
-                      // Dynamic Servers
-                      if (serverNames.isEmpty && !isLoading)
-                        Container(
-                          padding: EdgeInsets.all(32),
-                          child: Column(
-                            children: [
-                              Icon(
-                                CupertinoIcons.exclamationmark_triangle,
-                                color: Colors.black.withOpacity(0.3),
-                                size: 32,
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                'No servers found',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w400,
-                                  color: Colors.black.withOpacity(0.4),
-                                ),
-                              ),
-                            ],
+                    minSize: 0,
+                    onPressed: isRefreshing ? null : _refreshServers,
+                    child: isRefreshing
+                        ? CupertinoActivityIndicator(radius: 10)
+                        : Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: IOSColors.systemBlue.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              CupertinoIcons.arrow_clockwise,
+                              color: IOSColors.systemBlue,
+                              size: 20,
+                            ),
                           ),
-                        ),
-                      
-                      ...serverNames.asMap().entries.map((entry) {
-                        int index = entry.key;
-                        String serverName = entry.value;
-                        return _buildServerTile(
-                          icon: 'assets/lottie/server.json',
-                          title: serverName,
-                          isSelected: widget.selectedServer == serverName,
-                          onTap: () => widget.onServerSelected(serverName),
-                          isLast: index == serverNames.length - 1,
-                        );
-                      }).toList(),
-                    ],
                   ),
-                ),
+                ],
               ),
-              
-              SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
-            ],
-          ),
+            ),
+            
+            // Server List
+            Flexible(
+              child: Container(
+                margin: EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: IOSColors.secondarySystemGroupedBackground,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: isLoading
+                    ? Container(
+                        height: 200,
+                        child: Center(
+                          child: CupertinoActivityIndicator(),
+                        ),
+                      )
+                    : ListView(
+                        shrinkWrap: true,
+                        physics: BouncingScrollPhysics(),
+                        padding: EdgeInsets.zero,
+                        children: [
+                          _buildServerTile(
+                            icon: 'assets/lottie/auto.json',
+                            title: 'Automatic',
+                            subtitle: 'Best server selected automatically',
+                            isSelected: widget.selectedServer == 'Automatic',
+                            onTap: () => widget.onServerSelected('Automatic'),
+                            isFirst: true,
+                          ),
+                          
+                          ...servers.asMap().entries.map((entry) {
+                            int index = entry.key;
+                            var server = entry.value;
+                            return _buildServerTile(
+                              icon: 'assets/lottie/server.json',
+                              title: server['name'],
+                              subtitle: _getServerLocation(server['config']),
+                              ping: server['ping'],
+                              isSelected: widget.selectedServer == server['name'],
+                              onTap: () => widget.onServerSelected(server['name']),
+                              isLast: index == servers.length - 1,
+                            );
+                          }).toList(),
+                        ],
+                      ),
+              ),
+            ),
+            
+            SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+          ],
         ),
       ),
     );
   }
 
+  String _getServerLocation(String config) {
+    try {
+      if (config.contains('@')) {
+        final parts = config.split('@');
+        if (parts.length > 1) {
+          final hostPart = parts[1].split(':')[0];
+          if (hostPart.contains('.')) {
+            return hostPart.split('.')[0];
+          }
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    return 'Server';
+  }
+
   Widget _buildServerTile({
     required String icon,
     required String title,
+    String? subtitle,
+    int? ping,
     required bool isSelected,
     required VoidCallback onTap,
     bool isFirst = false,
@@ -318,47 +340,88 @@ class _IOSServerSelectionModalState extends State<IOSServerSelectionModal>
     return Column(
       children: [
         if (!isFirst)
-          Divider(
-            height: 1,
-            thickness: 0.5,
-            indent: 56,
-            color: Colors.black.withOpacity(0.1),
+          Padding(
+            padding: EdgeInsets.only(left: 64),
+            child: Divider(
+              height: 1,
+              thickness: 0.5,
+              color: IOSColors.separator,
+            ),
           ),
         CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: onTap,
           child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
-                // Icon
                 Container(
-                  width: 32,
-                  height: 32,
-                  child: Lottie.asset(icon, width: 32, height: 32),
-                ),
-                
-                SizedBox(width: 12),
-                
-                // Title
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w400,
-                      letterSpacing: -0.41,
-                      color: Colors.black,
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: isSelected 
+                        ? IOSColors.systemBlue.withOpacity(0.1)
+                        : IOSColors.tertiarySystemFill,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(
+                    child: Lottie.asset(
+                      icon,
+                      width: 24,
+                      height: 24,
                     ),
                   ),
                 ),
                 
-                // Checkmark
+                SizedBox(width: 12),
+                
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: IOSTypography.body.copyWith(
+                          color: IOSColors.label,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: IOSTypography.footnote.copyWith(
+                            color: IOSColors.secondaryLabel,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                
+                if (ping != null)
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    margin: EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: _getPingColor(ping).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '${ping}ms',
+                      style: IOSTypography.caption2.copyWith(
+                        color: _getPingColor(ping),
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                
                 if (isSelected)
                   Icon(
                     CupertinoIcons.checkmark_alt,
-                    color: Color(0xFF007AFF),
-                    size: 20,
+                    color: IOSColors.systemBlue,
+                    size: 22,
                   ),
               ],
             ),
@@ -366,5 +429,11 @@ class _IOSServerSelectionModalState extends State<IOSServerSelectionModal>
         ),
       ],
     );
+  }
+
+  Color _getPingColor(int ping) {
+    if (ping < 100) return IOSColors.systemGreen;
+    if (ping < 200) return IOSColors.systemOrange;
+    return IOSColors.systemRed;
   }
 }
