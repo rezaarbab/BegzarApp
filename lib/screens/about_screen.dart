@@ -133,7 +133,6 @@ class _AboutScreenState extends State<AboutScreen> with SingleTickerProviderStat
                 if (version != null)
                   Text(
                     'Version : $version',
-                    textDirection: TextDirection.ltr,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w400,
@@ -225,7 +224,6 @@ class _AboutScreenState extends State<AboutScreen> with SingleTickerProviderStat
 
                 Text(
                   context.tr('copyright'),
-                  textDirection: TextDirection.ltr,
                   style: TextStyle(
                     fontSize: 12,
                     color: IOSColors.tertiaryLabel,
