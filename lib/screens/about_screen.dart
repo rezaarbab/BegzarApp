@@ -135,12 +135,15 @@ class _AboutScreenState extends State<AboutScreen> with SingleTickerProviderStat
 
                 // Version - English numbers only
                 if (version != null)
-                  Text(
-                    'Version : $version',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w400,
-                      color: IOSColors.secondaryLabel,
+                  Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Text(
+                      'Version : $version',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w400,
+                        color: IOSColors.secondaryLabel,
+                      ),
                     ),
                   ),
 
@@ -228,13 +231,16 @@ class _AboutScreenState extends State<AboutScreen> with SingleTickerProviderStat
 
                 const SizedBox(height: 24),
 
-                Text(
-                  context.tr('copyright'),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: IOSColors.tertiaryLabel,
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Text(
+                    context.tr('copyright'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: IOSColors.tertiaryLabel,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
                 ),
 
                 const SizedBox(height: 24),
