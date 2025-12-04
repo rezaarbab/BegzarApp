@@ -7,13 +7,13 @@ import 'package:lottie/lottie.dart';
 import 'package:begzar/common/ios_theme.dart';
 
 class IOSVpnCard extends StatefulWidget {
-  final String downloadSpeed;
-  final String uploadSpeed;
+  final int downloadSpeed;
+  final int uploadSpeed;
   final String selectedServer;
   final String selectedServerLogo;
   final String duration;
-  final String download;
-  final String upload;
+  final int download;
+  final int upload;
 
   const IOSVpnCard({
     super.key,
@@ -227,8 +227,8 @@ class _IOSVpnCardState extends State<IOSVpnCard> with TickerProviderStateMixin {
                         child: _buildStatCard(
                           icon: CupertinoIcons.speedometer,
                           title: context.tr('realtime_usage'),
-                          download: widget.downloadSpeed,
-                          upload: widget.uploadSpeed,
+                          download: formatBytes(widget.downloadSpeed),
+                          upload: formatBytes(widget.uploadSpeed),
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
@@ -245,8 +245,8 @@ class _IOSVpnCardState extends State<IOSVpnCard> with TickerProviderStateMixin {
                         child: _buildStatCard(
                           icon: CupertinoIcons.chart_bar_fill,
                           title: context.tr('total_usage'),
-                          download: widget.download,
-                          upload: widget.upload,
+                          download: formatSpeedBytes(widget.download),
+                          upload: formatSpeedBytes(widget.upload),
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
@@ -435,6 +435,26 @@ class _IOSVpnCardState extends State<IOSVpnCard> with TickerProviderStateMixin {
         ],
       ),
     );
+  }
+
+  // Format for real-time speed - always shows MB/s
+  String formatBytes(int bytes) {
+    if (bytes <= 0) return '0.00 MB/s';
+    const int mb = 1024 * 1024;
+    double megabytes = bytes / mb;
+    return '${megabytes.toStringAsFixed(2)} MB/s';
+  }
+
+  // Format for total usage - auto-scales without /s
+  String formatSpeedBytes(int bytes) {
+    if (bytes <= 0) return '0 B';
+    const int kb = 1024;
+    const int mb = kb * 1024;
+    const int gb = mb * 1024;
+    if (bytes < kb) return '${bytes} B';
+    if (bytes < mb) return '${(bytes / kb).toStringAsFixed(1)} KB';
+    if (bytes < gb) return '${(bytes / mb).toStringAsFixed(1)} MB';
+    return '${(bytes / gb).toStringAsFixed(2)} GB';
   }
 }
 
