@@ -1,4 +1,4 @@
-import 'package:begzar/common/theme.dart';
+import 'package:begzar/common/ios_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +7,7 @@ import 'package:installed_apps/app_info.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class BlockedAppsWidgets extends StatefulWidget {
-   BlockedAppsWidgets({super.key});
+  BlockedAppsWidgets({super.key});
 
   @override
   State<BlockedAppsWidgets> createState() => _BlockedAppsWidgetsState();
@@ -28,6 +28,12 @@ class _BlockedAppsWidgetsState extends State<BlockedAppsWidgets>
     super.initState();
     _loadSettings();
     searchController.addListener(_filterApps);
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSettings() async {
@@ -64,9 +70,11 @@ class _BlockedAppsWidgetsState extends State<BlockedAppsWidgets>
       isLoading = false;
 
       Future.delayed(Duration(milliseconds: 500), () {
-        setState(() {
-          isSearchReady = true;
-        });
+        if (mounted) {
+          setState(() {
+            isSearchReady = true;
+          });
+        }
       });
     });
   }
@@ -116,69 +124,179 @@ class _BlockedAppsWidgetsState extends State<BlockedAppsWidgets>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: IOSColors.systemGroupedBackground,
       appBar: AppBar(
+        backgroundColor: IOSColors.systemBackground,
+        elevation: 0,
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => Navigator.pop(context),
+          child: Icon(
+            CupertinoIcons.back,
+            color: IOSColors.systemBlue,
+          ),
+        ),
         title: AnimatedOpacity(
           opacity: isSearchReady ? 1.0 : 0.0,
           duration: Duration(milliseconds: 500),
-          child: TextField(
+          child: CupertinoSearchTextField(
             controller: searchController,
-            decoration: InputDecoration(
-              hintText: context.tr('search_application'),
-              hintStyle: TextStyle(
-                  color: isSearchReady ? Colors.white : Colors.white70),
-              border: InputBorder.none,
-            ),
-            style: TextStyle(color: Colors.white),
+            placeholder: context.tr('search_application'),
             enabled: isSearchReady,
+            style: IOSTypography.body.copyWith(
+              color: IOSColors.label,
+            ),
           ),
         ),
-        backgroundColor: ThemeColor.backgroundColor,
-        elevation: 0,
         actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'toggleSystemApps') {
-                _toggleSystemApps();
-              }
-            },
-            itemBuilder: (BuildContext context) {
-              return [
-                CheckedPopupMenuItem<String>(
-                  value: 'toggleSystemApps',
-                  checked: isLoadSystemApps,
-                  child: Text(context.tr('show_system_apps')),
+          CupertinoButton(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            onPressed: () {
+              showCupertinoModalPopup(
+                context: context,
+                builder: (context) => CupertinoActionSheet(
+                  actions: [
+                    CupertinoActionSheetAction(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _toggleSystemApps();
+                      },
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            context.tr('show_system_apps'),
+                            style: IOSTypography.body,
+                          ),
+                          if (isLoadSystemApps)
+                            Icon(
+                              CupertinoIcons.checkmark_alt,
+                              color: IOSColors.systemBlue,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  cancelButton: CupertinoActionSheetAction(
+                    onPressed: () => Navigator.pop(context),
+                    isDefaultAction: true,
+                    child: Text('Cancel'),
+                  ),
                 ),
-              ];
+              );
             },
+            child: Icon(
+              CupertinoIcons.ellipsis_circle,
+              color: IOSColors.systemBlue,
+              size: 28,
+            ),
           ),
         ],
       ),
       body: isLoading
           ? Center(
-              child: CupertinoActivityIndicator(
-                color: Colors.white,
-              ),
+              child: CupertinoActivityIndicator(radius: 14),
             )
-          : ListView.builder(
+          : ListView.separated(
+              physics: BouncingScrollPhysics(),
+              padding: EdgeInsets.symmetric(vertical: 8),
               itemCount: filteredApps?.length ?? 0,
+              separatorBuilder: (context, index) => Divider(
+                height: 1,
+                thickness: 0.5,
+                color: IOSColors.separator,
+                indent: 72,
+              ),
               itemBuilder: (context, index) {
                 AppInfo app = filteredApps![index];
                 bool isBlocked = blockedApps.contains(app.packageName);
-                return ListTile(
-                  leading: app.icon != null && app.icon!.isNotEmpty
-                      ? Image.memory(app.icon!)
-                      : Icon(Icons.android),
-                  title: Text(app.name),
-                  subtitle: Text(app.packageName),
-                  trailing: Checkbox(
-                    value: isBlocked,
-                    onChanged: (bool? value) {
-                      _toggleBlockedApp(app.packageName);
-                    },
+                
+                return Container(
+                  color: IOSColors.secondarySystemGroupedBackground,
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () => _toggleBlockedApp(app.packageName),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      child: Row(
+                        children: [
+                          // App Icon
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                              color: IOSColors.tertiarySystemFill,
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: app.icon != null && app.icon!.isNotEmpty
+                                  ? Image.memory(
+                                      app.icon!,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Icon(
+                                      CupertinoIcons.app,
+                                      color: IOSColors.secondaryLabel,
+                                    ),
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          
+                          // App Info
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  app.name,
+                                  style: IOSTypography.body.copyWith(
+                                    color: IOSColors.label,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  app.packageName,
+                                  style: IOSTypography.footnote.copyWith(
+                                    color: IOSColors.secondaryLabel,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          
+                          // Checkbox
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isBlocked 
+                                    ? IOSColors.systemBlue 
+                                    : IOSColors.tertiaryLabel,
+                                width: 2,
+                              ),
+                              color: isBlocked 
+                                  ? IOSColors.systemBlue 
+                                  : Colors.transparent,
+                            ),
+                            child: isBlocked
+                                ? Icon(
+                                    CupertinoIcons.check_mark,
+                                    color: Colors.white,
+                                    size: 16,
+                                  )
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  onTap: () {
-                    _toggleBlockedApp(app.packageName);
-                  },
                 );
               },
             ),
