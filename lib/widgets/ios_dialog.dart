@@ -226,7 +226,7 @@ class _IOSDialogContent extends StatelessWidget {
   }) {
     return CupertinoButton(
       padding: EdgeInsets.symmetric(vertical: 12),
-      color: isPrimary ? IOSColors.systemBlue : IOSColors.systemGray5,
+      color: isPrimary ? IOSColors.systemBlue : IOSColors.secondarySystemBackground,
       borderRadius: BorderRadius.circular(12),
       onPressed: onPressed,
       child: Text(
