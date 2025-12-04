@@ -126,7 +126,7 @@ class _IOSVpnCardState extends State<IOSVpnCard> {
                       ),
                       SizedBox(width: 6),
                       Text(
-                        widget.duration,
+                        toEnglishDigits(widget.duration),
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -314,12 +314,26 @@ class _IOSVpnCardState extends State<IOSVpnCard> {
     );
   }
 
+  // Convert Persian/Arabic digits to English
+  String toEnglishDigits(String input) {
+    const english = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    const persian = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+    const arabic = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+
+    String result = input;
+    for (int i = 0; i < 10; i++) {
+      result = result.replaceAll(persian[i], english[i]);
+      result = result.replaceAll(arabic[i], english[i]);
+    }
+    return result;
+  }
+
   // Format for real-time speed - always shows MB/s
   String formatBytes(int bytes) {
     if (bytes <= 0) return '0.00 MB/s';
     const int mb = 1024 * 1024;
     double megabytes = bytes / mb;
-    return '${megabytes.toStringAsFixed(2)} MB/s';
+    return toEnglishDigits('${megabytes.toStringAsFixed(2)} MB/s');
   }
 
   // Format for total usage - auto-scales without /s
@@ -328,10 +342,10 @@ class _IOSVpnCardState extends State<IOSVpnCard> {
     const int kb = 1024;
     const int mb = kb * 1024;
     const int gb = mb * 1024;
-    if (bytes < kb) return '${bytes} B';
-    if (bytes < mb) return '${(bytes / kb).toStringAsFixed(1)} KB';
-    if (bytes < gb) return '${(bytes / mb).toStringAsFixed(1)} MB';
-    return '${(bytes / gb).toStringAsFixed(2)} GB';
+    if (bytes < kb) return toEnglishDigits('${bytes} B');
+    if (bytes < mb) return toEnglishDigits('${(bytes / kb).toStringAsFixed(1)} KB');
+    if (bytes < gb) return toEnglishDigits('${(bytes / mb).toStringAsFixed(1)} MB');
+    return toEnglishDigits('${(bytes / gb).toStringAsFixed(2)} GB');
   }
 }
 
