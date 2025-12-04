@@ -45,14 +45,14 @@ class _SettingsWidgetState extends State<SettingsWidget> {
         backgroundColor: IOSColors.systemBackground,
         elevation: 0,
         centerTitle: true,
-        automaticallyImplyLeading: false, // ✅ حذف دکمه Back
+        automaticallyImplyLeading: false,
       ),
       backgroundColor: IOSColors.systemGroupedBackground,
       body: ListView(
         physics: BouncingScrollPhysics(),
         children: [
           const SizedBox(height: 32),
-          
+
           // Blocking Settings Section
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -86,7 +86,7 @@ class _SettingsWidgetState extends State<SettingsWidget> {
           ),
 
           const SizedBox(height: 32),
-          
+
           // Language Settings Section
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -108,14 +108,12 @@ class _SettingsWidgetState extends State<SettingsWidget> {
               icon: CupertinoIcons.globe,
               iconColor: IOSColors.systemBlue,
               title: context.tr('language'),
-              subtitle: _selectedLanguage,
+              subtitle: 'English',
               onTap: () {
                 Navigator.of(context)
                     .push(
                   CupertinoPageRoute(
-                    builder: (context) => LanguageWidget(
-                      selectedLanguage: _selectedLanguage!,
-                    ),
+                    builder: (context) => LanguageWidget(),
                   ),
                 )
                     .then((value) {
@@ -124,7 +122,7 @@ class _SettingsWidgetState extends State<SettingsWidget> {
               },
             ),
           ),
-          
+
           const SizedBox(height: 40),
         ],
       ),
