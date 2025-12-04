@@ -251,43 +251,50 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildDelayIndicator() {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (connectedServerDelay == null)
-            CupertinoActivityIndicator(radius: 10)
-          else ...[
-            Icon(
-              CupertinoIcons.wifi,
-              color: IOSColors.systemGreen,
-              size: 16,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              '${connectedServerDelay}ms',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.24,
-                color: Colors.black,
-              ),
+   Widget _buildDelayIndicator() {
+    return GestureDetector(
+      onTap: () {
+        if (!isFetchingPing && v2rayStatus.value.state == 'CONNECTED') {
+          delay();
+        }
+      },
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: Offset(0, 2),
             ),
           ],
-        ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (connectedServerDelay == null || isFetchingPing)
+              CupertinoActivityIndicator(radius: 10)
+            else ...[
+              Icon(
+                CupertinoIcons.wifi,
+                color: IOSColors.systemGreen,
+                size: 16,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '${connectedServerDelay}ms',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.24,
+                  color: Colors.black,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -788,11 +795,17 @@ class _HomePageState extends State<HomePage> {
 
   void delay() async {
     if (v2rayStatus.value.state == 'CONNECTED') {
-      connectedServerDelay = await flutterV2ray.getConnectedServerDelay();
       setState(() {
         isFetchingPing = true;
+        connectedServerDelay = null;
       });
+
+      connectedServerDelay = await flutterV2ray.getConnectedServerDelay();
+
+      if (mounted) {
+        setState(() {
+          isFetchingPing = false;
+        });
+      }
     }
-    if (!mounted) return;
   }
-}
