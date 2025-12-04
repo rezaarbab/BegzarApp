@@ -253,7 +253,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ),
 
             Expanded(
-              child: Center(
+              child: SingleChildScrollView(
+                physics: BouncingScrollPhysics(),
                 child: ValueListenableBuilder(
                   valueListenable: v2rayStatus,
                   builder: (context, value, child) {
@@ -302,29 +303,32 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                               ),
                             ],
                           )
-                        : Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IOSConnectionWidget(
-                                onTap: () => _handleConnectionTap(value),
-                                isLoading: isLoading,
-                                status: value.state,
-                              ),
-                              if (value.state == 'CONNECTED') ...[
-                                const SizedBox(height: 16),
-                                _buildDelayIndicator(),
-                                const SizedBox(height: 32),
-                                IOSVpnCard(
-                                  download: value.download,
-                                  upload: value.upload,
-                                  downloadSpeed: value.downloadSpeed,
-                                  uploadSpeed: value.uploadSpeed,
-                                  selectedServer: selectedServer,
-                                  selectedServerLogo: selectedServerLogo ?? 'assets/lottie/auto.json',
-                                  duration: value.duration,
+                        : Padding(
+                            padding: const EdgeInsets.only(bottom: 24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IOSConnectionWidget(
+                                  onTap: () => _handleConnectionTap(value),
+                                  isLoading: isLoading,
+                                  status: value.state,
                                 ),
+                                if (value.state == 'CONNECTED') ...[
+                                  const SizedBox(height: 16),
+                                  _buildDelayIndicator(),
+                                  const SizedBox(height: 32),
+                                  IOSVpnCard(
+                                    download: value.download,
+                                    upload: value.upload,
+                                    downloadSpeed: value.downloadSpeed,
+                                    uploadSpeed: value.uploadSpeed,
+                                    selectedServer: selectedServer,
+                                    selectedServerLogo: selectedServerLogo ?? 'assets/lottie/auto.json',
+                                    duration: value.duration,
+                                  ),
+                                ],
                               ],
-                            ],
+                            ),
                           );
                   },
                 ),
