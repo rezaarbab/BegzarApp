@@ -1,9 +1,10 @@
 import 'dart:ui';
 import 'package:dio/dio.dart';
-import 'package:easy_localization/easy_localization.dart';
+import 'package:easy_localization/easy_localization.dart' hide NumberFormat;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+import 'package:intl/intl.dart';
 
 class IOSVpnCard extends StatefulWidget {
   final int downloadSpeed;
@@ -328,24 +329,37 @@ class _IOSVpnCardState extends State<IOSVpnCard> {
     return result;
   }
 
-  // Format for real-time speed - always shows MB/s
+  // Format for real-time speed - always shows MB/s with English numbers
   String formatBytes(int bytes) {
     if (bytes <= 0) return '0.00 MB/s';
     const int mb = 1024 * 1024;
     double megabytes = bytes / mb;
-    return toEnglishDigits('${megabytes.toStringAsFixed(2)} MB/s');
+    // Use explicit English locale to force English digits
+    final formatter = NumberFormat('#0.00', 'en_US');
+    return '${formatter.format(megabytes)} MB/s';
   }
 
-  // Format for total usage - auto-scales without /s
+  // Format for total usage - auto-scales without /s with English numbers
   String formatSpeedBytes(int bytes) {
     if (bytes <= 0) return '0 B';
     const int kb = 1024;
     const int mb = kb * 1024;
     const int gb = mb * 1024;
-    if (bytes < kb) return toEnglishDigits('${bytes} B');
-    if (bytes < mb) return toEnglishDigits('${(bytes / kb).toStringAsFixed(1)} KB');
-    if (bytes < gb) return toEnglishDigits('${(bytes / mb).toStringAsFixed(1)} MB');
-    return toEnglishDigits('${(bytes / gb).toStringAsFixed(2)} GB');
+
+    // Use explicit English locale for all formatters
+    if (bytes < kb) {
+      return '$bytes B';
+    }
+    if (bytes < mb) {
+      final formatter = NumberFormat('#0.0', 'en_US');
+      return '${formatter.format(bytes / kb)} KB';
+    }
+    if (bytes < gb) {
+      final formatter = NumberFormat('#0.0', 'en_US');
+      return '${formatter.format(bytes / mb)} MB';
+    }
+    final formatter = NumberFormat('#0.00', 'en_US');
+    return '${formatter.format(bytes / gb)} GB';
   }
 }
 
