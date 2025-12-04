@@ -27,7 +27,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   var v2rayStatus = ValueNotifier<V2RayStatus>(V2RayStatus());
   late final FlutterV2ray flutterV2ray = FlutterV2ray(
     onStatusChanged: (status) {
@@ -48,9 +48,29 @@ class _HomePageState extends State<HomePage> {
   bool isFetchingPing = false;
   List<String> blockedApps = [];
 
+  // Animation controllers for logo
+  late AnimationController _logoAnimationController;
+  late Animation<double> _logoRotation;
+  late Animation<double> _logoScale;
+
   @override
   void initState() {
     super.initState();
+
+    // Initialize logo animation
+    _logoAnimationController = AnimationController(
+      duration: Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    _logoRotation = Tween<double>(begin: 0, end: 2 * 3.14159).animate(
+      CurvedAnimation(parent: _logoAnimationController, curve: Curves.easeInOut),
+    );
+
+    _logoScale = Tween<double>(begin: 1.0, end: 1.2).animate(
+      CurvedAnimation(parent: _logoAnimationController, curve: Curves.easeInOut),
+    );
+
     getVersionName();
     _loadServerSelection();
     flutterV2ray
@@ -73,20 +93,16 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  // Helper function to localize numbers
-  String localizeNumber(String number) {
-    if (context.locale.languageCode == 'fa') {
-      // Persian digits
-      const english = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-      const persian = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
-      
-      String result = number;
-      for (int i = 0; i < english.length; i++) {
-        result = result.replaceAll(english[i], persian[i]);
-      }
-      return result;
-    }
-    return number;
+  @override
+  void dispose() {
+    _logoAnimationController.dispose();
+    super.dispose();
+  }
+
+  void _animateLogo() {
+    _logoAnimationController.forward().then((_) {
+      _logoAnimationController.reverse();
+    });
   }
 
   @override
@@ -154,7 +170,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
-            
+
             Expanded(
               child: Center(
                 child: ValueListenableBuilder(
@@ -253,10 +269,24 @@ class _HomePageState extends State<HomePage> {
       actions: [
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: Image.asset(
-            'assets/images/logo_transparent.png',
-            color: IOSColors.systemBlue,
-            height: 32,
+          child: GestureDetector(
+            onTap: _animateLogo,
+            child: AnimatedBuilder(
+              animation: _logoAnimationController,
+              builder: (context, child) {
+                return Transform.rotate(
+                  angle: _logoRotation.value,
+                  child: Transform.scale(
+                    scale: _logoScale.value,
+                    child: Image.asset(
+                      'assets/images/logo_transparent.png',
+                      color: IOSColors.systemBlue,
+                      height: 32,
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ],
@@ -300,7 +330,7 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(width: 6),
               Text(
-                localizeNumber('${connectedServerDelay}ms'),
+                '${connectedServerDelay}ms',
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
@@ -413,29 +443,32 @@ class _HomePageState extends State<HomePage> {
       });
 
       domainName = 'begzar-api.lastofanarchy.workers.dev';
-      
+
+      // ✅ Auto-refresh server list on first launch and every 24 hours
       String? lastUpdate = prefs.getString('last_server_update');
       bool shouldUpdate = false;
-      
+
       if (lastUpdate == null) {
+        // First time - always fetch servers
         shouldUpdate = true;
       } else {
         try {
           DateTime lastUpdateTime = DateTime.parse(lastUpdate);
           Duration difference = DateTime.now().difference(lastUpdateTime);
-          
+
           if (difference.inHours >= 24) {
+            // More than 24 hours - refresh
             shouldUpdate = true;
           }
         } catch (e) {
           shouldUpdate = true;
         }
       }
-      
+
       if (shouldUpdate) {
         await _refreshServerList();
       }
-      
+
       checkUpdate();
     } on TimeoutException catch (e) {
       if (mounted) {
@@ -672,7 +705,7 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('سرور "$selectedServer" موجود نیست'),
+            content: Text('Server "$selectedServer" not available'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -699,7 +732,7 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('خطا در پردازش کانفیگ سرورها'),
+            content: Text('Error processing server configs'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -727,7 +760,7 @@ class _HomePageState extends State<HomePage> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('خطا در اتصال: $e'),
+                content: Text('Connection error: $e'),
                 behavior: SnackBarBehavior.floating,
               ),
             );
@@ -782,7 +815,7 @@ class _HomePageState extends State<HomePage> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('هیچ سرور فعالی یافت نشد. همه سرورها Timeout شدند.'),
+                content: Text('No active servers found. All servers timed out.'),
                 behavior: SnackBarBehavior.floating,
               ),
             );
@@ -792,7 +825,7 @@ class _HomePageState extends State<HomePage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('خطا در تست سرورها: $e'),
+              content: Text('Server test error: $e'),
               behavior: SnackBarBehavior.floating,
             ),
           );
