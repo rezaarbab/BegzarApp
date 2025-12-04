@@ -6,9 +6,11 @@ import 'package:begzar/common/cha.dart';
 import 'package:begzar/common/http_client.dart';
 import 'package:begzar/common/secure_storage.dart';
 import 'package:begzar/common/ios_theme.dart';
+import 'package:begzar/common/encryption_helper.dart';
 import 'package:begzar/widgets/ios_connection_widget.dart';
 import 'package:begzar/widgets/ios_server_selection_modal.dart';
 import 'package:begzar/widgets/ios_vpn_card.dart';
+import 'package:begzar/widgets/ios_dialog.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -667,6 +669,55 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         final version = dataJson['version'];
         final updateUrl = dataJson['updated_url'];
 
+        // Handle notification from server
+        if (dataJson['notification'] != null) {
+          final notification = dataJson['notification'];
+          SharedPreferences prefs = await SharedPreferences.getInstance();
+          bool shownOnce = prefs.getBool('notification_shown') ?? false;
+
+          if (!shownOnce || notification['show_once'] == false) {
+            IOSDialog.show(
+              context: context,
+              title: notification['title'] ?? 'Notification',
+              message: notification['message'] ?? '',
+              type: _getDialogType(notification['type']),
+              primaryButtonText: 'OK',
+              onPrimaryPressed: () async {
+                await prefs.setBool('notification_shown', true);
+              },
+            );
+          }
+        }
+
+        // Handle force update from server
+        if (dataJson['force_update'] != null) {
+          final forceUpdate = dataJson['force_update'];
+          if (forceUpdate['required'] == true) {
+            String minVersion = forceUpdate['min_version'] ?? '0.0.0';
+            if (_compareVersions(versionName!, minVersion) < 0) {
+              IOSDialog.show(
+                context: context,
+                title: forceUpdate['title'] ?? 'Update Required',
+                message: forceUpdate['message'] ?? 'Please update to continue',
+                type: IOSDialogType.warning,
+                primaryButtonText: 'Update',
+                secondaryButtonText: 'Later',
+                dismissible: false,
+                onPrimaryPressed: () async {
+                  String downloadUrl = forceUpdate['download_url'] ?? '';
+                  if (downloadUrl.isNotEmpty) {
+                    await launchUrl(
+                      Uri.parse(utf8.decode(base64Decode(downloadUrl))),
+                      mode: LaunchMode.externalApplication,
+                    );
+                  }
+                },
+              );
+              return; // Don't connect if force update required
+            }
+          }
+        }
+
         List<dynamic> serversJson = dataJson['servers'];
         List<Map<String, String>> servers = [];
 
@@ -804,11 +855,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
     for (var server in filteredServers) {
       try {
-        final V2RayURL v2rayURL = FlutterV2ray.parseFromURL(server['config']!);
+        // Decrypt server config before parsing
+        String config = server['config']!;
+        String decryptedConfig = EncryptionHelper.decryptServer(config);
+
+        final V2RayURL v2rayURL = FlutterV2ray.parseFromURL(decryptedConfig);
         String fullConfig = v2rayURL.getFullConfiguration();
         configList.add(fullConfig);
       } catch (e) {
-        // Silent error handling
+        // Silent error handling - config might not be encrypted or invalid
       }
     }
 
@@ -941,5 +996,35 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         });
       }
     }
+  }
+
+  // Helper: Get dialog type from string
+  IOSDialogType _getDialogType(String? type) {
+    switch (type) {
+      case 'success':
+        return IOSDialogType.success;
+      case 'error':
+        return IOSDialogType.error;
+      case 'warning':
+        return IOSDialogType.warning;
+      case 'notification':
+        return IOSDialogType.notification;
+      default:
+        return IOSDialogType.info;
+    }
+  }
+
+  // Helper: Compare versions (e.g., "5.5.0" vs "6.0.0")
+  int _compareVersions(String v1, String v2) {
+    List<int> parts1 = v1.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    List<int> parts2 = v2.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+
+    for (int i = 0; i < 3; i++) {
+      int part1 = i < parts1.length ? parts1[i] : 0;
+      int part2 = i < parts2.length ? parts2[i] : 0;
+      if (part1 < part2) return -1;
+      if (part1 > part2) return 1;
+    }
+    return 0;
   }
 }
