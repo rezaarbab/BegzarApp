@@ -73,6 +73,22 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  // Helper function to localize numbers
+  String localizeNumber(String number) {
+    if (context.locale.languageCode == 'fa') {
+      // Persian digits
+      const english = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+      const persian = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+      
+      String result = number;
+      for (int i = 0; i < english.length; i++) {
+        result = result.replaceAll(english[i], persian[i]);
+      }
+      return result;
+    }
+    return number;
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -175,10 +191,10 @@ class _HomePageState extends State<HomePage> {
                                   if (value.state == 'CONNECTED') ...[
                                     Expanded(
                                       child: IOSVpnCard(
-                                        download: value.download.toString(),
-                                        upload: value.upload.toString(),
-                                        downloadSpeed: value.downloadSpeed.toString(),
-                                        uploadSpeed: value.uploadSpeed.toString(),
+                                        download: value.download,
+                                        upload: value.upload,
+                                        downloadSpeed: value.downloadSpeed,
+                                        uploadSpeed: value.uploadSpeed,
                                         selectedServer: selectedServer,
                                         selectedServerLogo: selectedServerLogo ?? 'assets/lottie/auto.json',
                                         duration: value.duration,
@@ -202,10 +218,10 @@ class _HomePageState extends State<HomePage> {
                                 _buildDelayIndicator(),
                                 const SizedBox(height: 32),
                                 IOSVpnCard(
-                                  download: value.download.toString(),
-                                  upload: value.upload.toString(),
-                                  downloadSpeed: value.downloadSpeed.toString(),
-                                  uploadSpeed: value.uploadSpeed.toString(),
+                                  download: value.download,
+                                  upload: value.upload,
+                                  downloadSpeed: value.downloadSpeed,
+                                  uploadSpeed: value.uploadSpeed,
                                   selectedServer: selectedServer,
                                   selectedServerLogo: selectedServerLogo ?? 'assets/lottie/auto.json',
                                   duration: value.duration,
@@ -251,7 +267,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-   Widget _buildDelayIndicator() {
+  Widget _buildDelayIndicator() {
     return GestureDetector(
       onTap: () {
         if (!isFetchingPing && v2rayStatus.value.state == 'CONNECTED') {
@@ -284,7 +300,7 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(width: 6),
               Text(
-                '${connectedServerDelay}ms',
+                localizeNumber('${connectedServerDelay}ms'),
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
@@ -809,3 +825,4 @@ class _HomePageState extends State<HomePage> {
       }
     }
   }
+}
